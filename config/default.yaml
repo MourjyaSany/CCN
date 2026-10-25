@@ -1,0 +1,280 @@
+# =============================================================================
+# NetShield-GNN :: Default runtime configuration
+# -----------------------------------------------------------------------------
+# Every value here can be overridden on the command line, e.g.
+#     python scripts/run_experiment.py --set simulation.duration_s=120
+# or by supplying an experiment block from config/experiments.yaml.
+# =============================================================================
+
+project:
+  name: "NetShield-GNN"
+  version: "2.0.0"
+
+# ---------------------------------------------------------------------------
+# Reproducibility
+# ---------------------------------------------------------------------------
+seed: 42
+
+# ---------------------------------------------------------------------------
+# Filesystem layout (all paths are resolved relative to the repository root)
+# ---------------------------------------------------------------------------
+paths:
+  data_raw: "data/raw"
+  data_processed: "data/processed"
+  data_experiments: "data/experiments"
+  models: "models"
+  results: "results"
+  figures: "results/figures"
+  metrics: "results/metrics"
+  reports: "results/reports"
+  database: "data/netshield.db"
+  logs: "results/logs"
+
+# ---------------------------------------------------------------------------
+# Simulation engine
+# ---------------------------------------------------------------------------
+simulation:
+  # "auto" -> use NS-3 if a working installation is detected, else fall back to
+  #           the built-in Python discrete-event emulator.
+  # "ns3"  -> require NS-3 (hard error if unavailable)
+  # "python" -> always use the Python discrete-event emulator
+  engine: "auto"
+  duration_s: 90.0
+  n_iot_devices: 24
+  n_attackers: 0
+  # Safety rails. The fuzzer can legitimately choose an attack rate that
+  # would take hours to simulate; these bound a single run so a batch job
+  # degrades honestly (the run is marked truncated) instead of hanging.
+  max_packets: 4000000
+  max_wall_seconds: 240.0
+  # Progress logging cadence in simulated seconds
+  log_every_s: 15.0
+
+# ---------------------------------------------------------------------------
+# Legitimate IoT traffic model
+# ---------------------------------------------------------------------------
+traffic:
+  # Device-class mix used when the fleet is generated. Weights are normalised.
+  device_mix:
+    mqtt_sensor:   0.50   # periodic small telemetry publishes
+    http_client:   0.20   # request/response REST calls to the cloud
+    tcp_uploader:  0.15   # bulk-ish periodic firmware/log upload over TCP
+    udp_streamer:  0.15   # constant-bitrate UDP telemetry / audio
+
+  mqtt_sensor:
+    publish_interval_s: 2.0
+    interval_jitter: 0.35        # +/- fraction, uniform
+    payload_bytes: [48, 220]     # uniform range
+    protocol: "TCP"              # MQTT rides on TCP
+    dst_port: 8883
+
+  http_client:
+    request_interval_s: 6.0
+    interval_jitter: 0.5
+    request_bytes: [180, 640]
+    response_bytes: [500, 6000]
+    protocol: "TCP"
+    dst_port: 80
+
+  tcp_uploader:
+    upload_interval_s: 20.0
+    interval_jitter: 0.4
+    upload_bytes: [20000, 120000]
+    segment_bytes: 1400
+    protocol: "TCP"
+    dst_port: 443
+
+  udp_streamer:
+    packet_interval_s: 0.08
+    interval_jitter: 0.2
+    payload_bytes: [200, 400]
+    protocol: "UDP"
+    dst_port: 5683               # CoAP-like
+
+# ---------------------------------------------------------------------------
+# Attack model (all attacks are confined to the simulated topology)
+# ---------------------------------------------------------------------------
+attack:
+  enabled: false
+  # udp_flood | syn_flood | http_flood | icmp_flood | ack_flood | slowloris | mixed
+  type: "udp_flood"
+  start_s: 30.0
+  duration_s: 30.0
+  # "cloud" | "gateway" | an explicit node id from the topology (e.g. "gw-1",
+  # which is how you aim at one domain of a multi_gateway fabric).
+  target: "cloud"
+  packets_per_second: 1200.0     # per attacker node, before rate_jitter
+  packet_bytes: [512, 512]
+  dst_ports: [8883]
+  # Burst / pulsing wave shape. duty_cycle == 1.0 -> continuous flood.
+  burst:
+    enabled: false
+    on_s: 2.0
+    off_s: 3.0
+  # Source spoofing within the simulated private range (never leaves the sim).
+  spoof_sources: false
+  spoof_pool: 64
+
+  # ---------------------------------------------------------------------------
+  # Rate shaping. The waveform multiplies packets_per_second over the attack
+  # window; the burst block above is orthogonal and multiplies on top of it, so
+  # a pulsing ramp is expressible. A ramp is the interesting adversarial case:
+  # it crosses a static threshold slowly enough that a fixed rate rule alarms
+  # late or not at all.
+  #   constant : flat rate (default)
+  #   ramp     : linear from ramp_start_factor to ramp_end_factor
+  #   sine     : sinusoidal modulation of depth sine_depth
+  #   step     : staircase through step_levels, one level per step_interval_s
+  # ---------------------------------------------------------------------------
+  shape:
+    profile: "constant"
+    ramp_start_factor: 0.1
+    ramp_end_factor: 1.0
+    sine_period_s: 10.0
+    sine_depth: 0.5
+    step_levels: [0.25, 0.5, 0.75, 1.0]
+    step_interval_s: 5.0
+
+  # Per-bot heterogeneity. [lo, hi] multiplier drawn once per attacker, so the
+  # botnet is not a set of identical emitters sitting on one point in feature
+  # space. stagger_s spreads the bots' join times over that many seconds.
+  rate_jitter: [1.0, 1.0]
+  stagger_s: 0.0
+
+  # Source-port pool size per attacker (bounds flow cardinality while still
+  # producing the port entropy a real botnet exhibits).
+  port_pool: 64
+
+  # Relative weights used when type == "mixed". Empty -> uniform over
+  # udp_flood / syn_flood / http_flood.
+  family_mix: {}
+
+  # slowloris-specific: concurrent half-finished connections held open per bot,
+  # and the dribble interval that keeps each one alive.
+  slowloris:
+    sockets: 40
+    keepalive_s: 8.0
+
+# ---------------------------------------------------------------------------
+# Flow / window feature extraction
+# ---------------------------------------------------------------------------
+features:
+  window_s: 5.0
+  # A flow is the classic 5-tuple; it expires after this much idle time.
+  flow_timeout_s: 15.0
+  # Node is labelled MALICIOUS if >= this fraction of its window packets are
+  # attack packets; SUSPICIOUS above the lower bound.
+  label_malicious_threshold: 0.55
+  label_suspicious_threshold: 0.12
+
+# ---------------------------------------------------------------------------
+# Graph construction
+# ---------------------------------------------------------------------------
+graph:
+  # Add reverse edges so information flows both ways during message passing.
+  add_reverse_edges: true
+  # Connect devices that share a parent router (structural/topological edges).
+  add_sibling_edges: false
+  self_loops: true
+  # Edge weight source: "packets" | "bytes" | "log_packets"
+  edge_weight: "log_packets"
+
+# ---------------------------------------------------------------------------
+# Detectors
+# ---------------------------------------------------------------------------
+detection:
+  classes: ["BENIGN", "SUSPICIOUS", "MALICIOUS"]
+
+  threshold:
+    # Rule-based baseline. Units are per-window, per-node.
+    packet_rate_pps: 220.0
+    byte_rate_bps: 900000.0
+    unique_dst_ports: 12
+    syn_ratio: 0.55
+    suspicious_scale: 0.45       # fraction of the above -> SUSPICIOUS
+
+  random_forest:
+    n_estimators: 300
+    max_depth: 14
+    min_samples_leaf: 2
+    class_weight: "balanced"
+    n_jobs: -1
+
+  graphsage:
+    hidden_channels: 64
+    num_layers: 2
+    dropout: 0.3
+    aggr: "mean"
+    lr: 0.008
+    weight_decay: 0.0005
+    epochs: 220
+    patience: 40
+    batch_graphs: 16
+    normalize_features: true
+    class_weighting: true
+
+  # Probability at or above which the mitigation engine acts.
+  mitigation_trigger_probability: 0.80
+
+# ---------------------------------------------------------------------------
+# Mitigation engine
+# ---------------------------------------------------------------------------
+mitigation:
+  enabled: false
+  # Confidence bands -> action
+  policy:
+    rate_limit_probability: 0.60     # >= 0.60 -> token-bucket rate limit
+    block_probability: 0.85          # >= 0.85 -> simulated source block
+    isolate_probability: 0.95        # >= 0.95 and repeated -> gateway isolation
+  rate_limit_pps: 60.0               # token bucket refill for throttled sources
+  rate_limit_burst: 30
+  # Number of consecutive malicious windows before escalating to isolation.
+  escalation_windows: 2
+  # Sources are re-evaluated and released after this many clean windows.
+  release_after_clean_windows: 3
+  # Where enforcement happens: "gateway" (ingress ACL) or "router"
+  enforcement_point: "gateway"
+  # Human-in-the-loop: "auto" installs every rule, "hybrid" auto-installs
+  # rate limits but queues block/isolate for an operator, "manual" queues all.
+  approval_mode: "auto"
+
+# ---------------------------------------------------------------------------
+# Evaluation / figures
+# ---------------------------------------------------------------------------
+evaluation:
+  figure_dpi: 140
+  figure_format: "png"
+  test_size: 0.25
+  val_size: 0.15
+  # One-way delay objective for never-compromised devices. A clean packet that
+  # is lost or arrives later than this counts against service availability.
+  slo_latency_ms: 100.0
+  # Statistical protocol: bootstrap resamples (over runs), CI level, and the
+  # family-wise error rate for Holm-corrected detector comparisons.
+  bootstrap_resamples: 2000
+  ci_level: 0.95
+  alpha: 0.05
+
+# ---------------------------------------------------------------------------
+# API / dashboard
+# ---------------------------------------------------------------------------
+api:
+  host: "127.0.0.1"
+  port: 8000
+  reload: false
+  cors_origins: ["http://localhost:5173", "http://127.0.0.1:5173"]
+  # Audit trail (hash-chained, append-only). ":memory:" for tests.
+  audit_db: "data/audit.db"
+  auth:
+    # When enabled every /api and /ws request needs a bearer token and the
+    # role in netshield.platform.security.ACCESS_RULES. Also switched on by
+    # the environment variable NETSHIELD_AUTH=1. Users come from users_file
+    # (PBKDF2 hashes) and, for development, NETSHIELD_DEV_USERS.
+    enabled: false
+    users_file: "config/users.yaml"
+    token_ttl_s: 3600
+    pbkdf2_iterations: 600000
+
+logging:
+  level: "INFO"
+  format: "%(asctime)s | %(levelname)-7s | %(name)-28s | %(message)s"

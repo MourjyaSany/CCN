@@ -1,0 +1,30 @@
+# =============================================================================
+# NetShield-GNN
+#
+#   docker compose up                                # dashboard on :8000
+#   docker compose run --rm netshield ./run.sh all   # regenerate everything
+#   docker compose run --rm netshield ./run.sh demo  # live demonstration
+#   docker compose run --rm netshield pytest         # test suite
+# =============================================================================
+services:
+  netshield:
+    build: .
+    image: netshield-gnn:1.0.0
+    container_name: netshield-gnn
+    ports:
+      - "8000:8000"
+    volumes:
+      # Bind-mount the artefact directories so results survive the container and
+      # can be inspected from the host.
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./results:/app/results
+      - ./config:/app/config:ro
+    environment:
+      NETSHIELD_ROOT: /app
+      NETSHIELD_HOST: 0.0.0.0
+      NETSHIELD_PORT: "8000"
+      PYTHONUNBUFFERED: "1"
+    stdin_open: true
+    tty: true
+    restart: unless-stopped

@@ -1,0 +1,120 @@
+# =============================================================================
+# NetShield-GNN :: Network / Topology configuration
+# -----------------------------------------------------------------------------
+# Describes the physical IoT -> Router -> Edge Gateway -> Cloud topology that is
+# instantiated by netshield.simulation.topology.build_topology().
+#
+# Link semantics (all links are full-duplex store-and-forward with drop-tail
+# queues):
+#   bandwidth_bps : serialization capacity, bits/second
+#   delay_ms      : one-way propagation delay, milliseconds
+#   queue_packets : drop-tail buffer depth of the *transmit* side, in packets
+#   loss          : independent random bit-error/loss probability [0,1]
+# =============================================================================
+
+topology:
+  name: "iot-edge-cloud-3tier"
+
+  # ---------------------------------------------------------------------------
+  # Topology family. Each one changes a structural assumption of the baseline
+  # tree, so the experiments can separate real detector advantages from
+  # artefacts of having exactly one choke point. See
+  # netshield.simulation.topologies for the full rationale.
+  #
+  #   tree          : baseline 4-tier IoT -> router -> gateway -> cloud
+  #   star          : flat, one router, no intermediate aggregation
+  #   multi_gateway : several gateways; the botnet straddles enforcement domains
+  #   dumbbell      : bottleneck is a backbone span, not the edge uplink
+  #   fat_tree      : dual-homed edge routers -> genuinely redundant paths
+  #   mesh          : ring + chords, multipath routing
+  #   ring          : ring attached to the gateway at a single point
+  # ---------------------------------------------------------------------------
+  family: "tree"
+
+  # -- family-specific parameters (ignored by the families that do not use them)
+  multi_gateway:
+    gateways: 3                 # independent enforcement domains
+    routers_per_gateway: 2
+
+  dumbbell:
+    edge_routers: 3
+    backbone_bandwidth_factor: 0.5   # backbone is half the gateway uplink rate
+    backbone_delay_factor: 2.5       # ... and 2.5x the propagation delay
+
+  fat_tree:
+    aggregation: 2              # aggregation routers (each edge router dual-homes)
+    edge: 4                     # edge/access routers
+    aggregation_bandwidth_factor: 2.0
+
+  mesh:
+    routers: 5
+    extra_links: 3              # chords across the ring -> alternative paths
+    span_delay_factor: 1.5
+
+  ring:
+    routers: 5
+    span_delay_factor: 1.5
+
+  # ---------------------------------------------------------------------------
+  # Tier 4 :: Cloud
+  # ---------------------------------------------------------------------------
+  cloud:
+    id: "cloud-0"
+    ip: "10.0.0.1"
+    # Application listeners the IoT fleet talks to.
+    services:
+      - {port: 8883, protocol: "MQTT"}   # MQTT over TLS-like
+      - {port: 80,   protocol: "HTTP"}
+      - {port: 443,  protocol: "HTTP"}
+    # Half-open connection table (used by the SYN-flood threat model)
+    syn_backlog: 256
+    syn_timeout_s: 8.0
+    # Concurrent application workers, and the ceiling on simultaneously
+    # ESTABLISHED connections. The latter is what a slowloris exhausts: it
+    # completes handshakes (so the SYN backlog is untouched) and then stalls.
+    worker_slots: 64
+    max_connections: 512
+
+  # ---------------------------------------------------------------------------
+  # Tier 3 :: Edge gateway (the DDoS choke point / mitigation enforcement point)
+  # ---------------------------------------------------------------------------
+  gateway:
+    id: "gw-0"
+    ip: "10.0.1.1"
+    # Gateway forwarding capacity (packets/second) - independent of link rate.
+    forwarding_pps: 20000
+    uplink:                      # gateway  <-> cloud   (the bottleneck)
+      bandwidth_bps: 20000000    # 20 Mbps
+      delay_ms: 12.0
+      queue_packets: 120
+      loss: 0.0
+
+  # ---------------------------------------------------------------------------
+  # Tier 2 :: Access routers (aggregate IoT subnets towards the gateway)
+  # ---------------------------------------------------------------------------
+  routers:
+    count: 3
+    ip_prefix: "10.0.2"
+    forwarding_pps: 40000
+    uplink:                      # router <-> gateway
+      bandwidth_bps: 50000000    # 50 Mbps
+      delay_ms: 3.0
+      queue_packets: 200
+      loss: 0.0
+
+  # ---------------------------------------------------------------------------
+  # Tier 1 :: IoT access links (device <-> router)
+  # ---------------------------------------------------------------------------
+  access_link:
+    bandwidth_bps: 4000000       # 4 Mbps  (IEEE 802.11 / 802.15.4-class access)
+    delay_ms: 1.5
+    queue_packets: 60
+    loss: 0.0005                 # 0.05% residual wireless loss
+
+  # Attackers sit on the same access fabric as legitimate devices (compromised
+  # IoT botnet), but may be given a fatter pipe to model a compromised NVR/DVR.
+  attacker_link:
+    bandwidth_bps: 12000000      # 12 Mbps
+    delay_ms: 1.5
+    queue_packets: 100
+    loss: 0.0

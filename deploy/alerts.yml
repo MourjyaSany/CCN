@@ -1,0 +1,22 @@
+groups:
+  - name: netshield
+    rules:
+      - alert: CleanAvailabilityBelowSLO
+        expr: netshield_clean_availability_ratio < 0.95
+        for: 30s
+        labels: { severity: critical }
+        annotations: { summary: "Clean-device availability below 95% for 30s" }
+      - alert: ApprovalsWaiting
+        expr: netshield_pending_approvals > 0
+        for: 2m
+        labels: { severity: warning }
+        annotations: { summary: "Mitigation actions waiting for an operator for 2 minutes" }
+      - alert: InferenceSlow
+        expr: histogram_quantile(0.99, sum by (le) (rate(netshield_inference_seconds_bucket[5m]))) > 0.5
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "p99 detector latency above 500 ms" }
+      - alert: AuthFailureBurst
+        expr: sum(increase(netshield_auth_failures_total[5m])) > 20
+        labels: { severity: warning }
+        annotations: { summary: "More than 20 rejected auth attempts in 5 minutes" }

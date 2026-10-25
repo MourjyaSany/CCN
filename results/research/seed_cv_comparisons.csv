@@ -1,0 +1,15 @@
+comparison,metric,other,diff,lo,hi,p_value,p_holm,significant
+graphsage vs threshold [macro_f1],macro_f1,threshold,0.4419637926712883,0.3981624247998195,0.4744302410459289,0.0,0.0,True
+graphsage vs threshold [hostile_pr_auc],hostile_pr_auc,threshold,0.4446783647340413,0.384033939924346,0.5018390172532772,0.0,0.0,True
+graphsage vs autoencoder [macro_f1],macro_f1,autoencoder,0.3554183117495132,0.30769524119714586,0.39765070116640755,0.0,0.0,True
+graphsage vs autoencoder [hostile_pr_auc],hostile_pr_auc,autoencoder,0.08981706908064269,0.06608123923586892,0.1117471069257053,0.0,0.0,True
+graphsage vs random_forest [macro_f1],macro_f1,random_forest,-0.04224039574771399,-0.05760978334288313,-0.03116723434166997,0.0,0.0,True
+graphsage vs random_forest [hostile_pr_auc],hostile_pr_auc,random_forest,-0.02839873944343585,-0.04509621832658267,-0.01453194048977265,0.0,0.0,True
+graphsage vs lightgbm [macro_f1],macro_f1,lightgbm,-0.03698651956356391,-0.048272950356158924,-0.026908166078662737,0.0,0.0,True
+graphsage vs lightgbm [hostile_pr_auc],hostile_pr_auc,lightgbm,-0.0269374737121707,-0.04356654688438932,-0.013194179521600085,0.0,0.0,True
+graphsage vs gru_seq [macro_f1],macro_f1,gru_seq,-0.039698475863278015,-0.05276376698816194,-0.027942240147583477,0.0,0.0,True
+graphsage vs gru_seq [hostile_pr_auc],hostile_pr_auc,gru_seq,-0.030733643548641165,-0.04863491992369402,-0.015531871335782188,0.0,0.0,True
+graphsage vs gat [macro_f1],macro_f1,gat,-0.008989039068473925,-0.019234654734248346,-0.0009158557710873277,0.04,0.08,False
+graphsage vs gat [hostile_pr_auc],hostile_pr_auc,gat,-0.01326578152682345,-0.024345428373488968,-0.0051574974081359595,0.0,0.0,True
+graphsage vs egraphsage [macro_f1],macro_f1,egraphsage,-0.008025413306358309,-0.01877485887150716,-0.0008967959193097259,0.0,0.0,True
+graphsage vs egraphsage [hostile_pr_auc],hostile_pr_auc,egraphsage,-0.0026746816475384794,-0.013574018158229029,0.007193485195809705,0.56,0.56,False

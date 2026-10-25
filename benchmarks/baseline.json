@@ -1,0 +1,20 @@
+{
+  "calibration_s": 0.24101100000552833,
+  "events": 595645,
+  "rows": 149,
+  "events_per_s": 103723.78749449764,
+  "raw": {
+    "sim_s_per_mevent": 9.640990019314984,
+    "features_s": 0.43690690002404153,
+    "graph_build_s": 0.07180849998258054,
+    "rf_us_per_row": 230.58456315615234,
+    "sage_us_per_row": 445.3879191958964
+  },
+  "relative": {
+    "sim_s_per_mevent": 40.002282132740156,
+    "features_s": 1.8128089589853564,
+    "graph_build_s": 0.29794698159392474,
+    "rf_us_per_row": 956.7387511394218,
+    "sage_us_per_row": 1847.9983037524432
+  }
+}

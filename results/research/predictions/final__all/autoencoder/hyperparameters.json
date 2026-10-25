@@ -1,0 +1,14 @@
+{
+  "hyper": {
+    "seed": 42,
+    "bottleneck": 10,
+    "lr": 0.002,
+    "epochs": 60,
+    "batch_size": 256,
+    "quantile": 99.0,
+    "malicious_ratio": 4.0
+  },
+  "extra": {
+    "threshold": 0.09094278723001403
+  }
+}

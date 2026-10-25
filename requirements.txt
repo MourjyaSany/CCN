@@ -1,0 +1,62 @@
+# =============================================================================
+# NetShield-GNN :: Python dependencies
+# -----------------------------------------------------------------------------
+#   pip install -r requirements.txt
+#
+# Everything here installs from PyPI wheels on Windows, macOS and Linux with no
+# compiler. The project deliberately avoids dependencies that need a C++
+# toolchain so it runs on an ordinary student laptop.
+# =============================================================================
+
+# --- core scientific stack ---------------------------------------------------
+numpy>=1.24,<3
+pandas>=2.0
+scipy>=1.10
+scikit-learn>=1.3
+joblib>=1.3
+
+# --- graph & deep learning ---------------------------------------------------
+networkx>=3.0
+# CPU wheels are fine; the models here are small. For CUDA, install torch from
+# https://pytorch.org/get-started/locally/ *before* running this file.
+torch>=2.0
+
+# Optional but strongly recommended: provides the native GraphSAGE layer.
+# If this wheel is unavailable, netshield.models.graphsage falls back to an
+# equivalent pure-PyTorch mean-aggregation layer and says so in every log line
+# and checkpoint manifest.
+torch-geometric>=2.4
+
+# --- visualisation -----------------------------------------------------------
+matplotlib>=3.7
+seaborn>=0.12
+
+# --- API and dashboard -------------------------------------------------------
+fastapi>=0.110
+uvicorn[standard]>=0.27
+pydantic>=2.5
+jinja2>=3.1
+
+# --- configuration & utilities ----------------------------------------------
+PyYAML>=6.0
+tqdm>=4.65
+
+# --- research protocol (baselines, adversary, real captures) ----------------
+lightgbm>=4.3        # gradient-boosted baseline
+optuna>=3.6          # adaptive (TPE) adversary
+dpkt>=1.9.8          # offline pcap parsing for real-data validation
+
+# --- platform: security, observability, serving -----------------------------
+python-multipart>=0.0.9   # OAuth2 password form
+pyjwt>=2.8
+prometheus_client>=0.20
+onnx>=1.16
+onnxruntime>=1.18
+onnxscript>=0.1
+redis>=5.0           # Redis Streams bus (optional at runtime)
+# psycopg[binary]>=3.1   # TimescaleDB writer (optional; deploy only)
+
+# --- testing -----------------------------------------------------------------
+pytest>=7.4
+httpx>=0.26          # FastAPI TestClient transport
+hypothesis>=6.100    # property-based tests

@@ -1,0 +1,12 @@
+{
+  "fold": "final__all",
+  "design": "final",
+  "fold_name": "all",
+  "variant": "egraphsage",
+  "detector": "egraphsage",
+  "fit_s": 612.29,
+  "n_train_rows": 92193,
+  "epochs": 36,
+  "best_epoch": 16,
+  "val_infer_us_per_row": 183.37090975987113
+}

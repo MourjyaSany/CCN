@@ -1,0 +1,12 @@
+{
+  "fold": "final__all",
+  "design": "final",
+  "fold_name": "all",
+  "variant": "random_forest",
+  "detector": "random_forest",
+  "fit_s": 11.77,
+  "n_train_rows": 92193,
+  "epochs": 1,
+  "best_epoch": 1,
+  "val_infer_us_per_row": 17.254162326047872
+}

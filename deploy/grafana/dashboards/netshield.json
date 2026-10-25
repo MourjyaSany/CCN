@@ -1,0 +1,31 @@
+{
+  "title": "NetShield-GNN operations",
+  "uid": "netshield-ops",
+  "schemaVersion": 39,
+  "refresh": "5s",
+  "time": { "from": "now-30m", "to": "now" },
+  "panels": [
+    { "type": "stat", "title": "Clean-device availability", "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1 } },
+      "targets": [{ "expr": "netshield_clean_availability_ratio" }] },
+    { "type": "stat", "title": "Active mitigation rules", "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "targets": [{ "expr": "netshield_active_rules" }] },
+    { "type": "stat", "title": "Pending approvals", "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "targets": [{ "expr": "netshield_pending_approvals" }] },
+    { "type": "stat", "title": "Auth failures (5m)", "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "targets": [{ "expr": "sum(increase(netshield_auth_failures_total[5m]))" }] },
+    { "type": "timeseries", "title": "Inference latency p50 / p99", "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.5, sum by (le, detector) (rate(netshield_inference_seconds_bucket[1m])))", "legendFormat": "p50 {{detector}}" },
+        { "expr": "histogram_quantile(0.99, sum by (le, detector) (rate(netshield_inference_seconds_bucket[1m])))", "legendFormat": "p99 {{detector}}" } ] },
+    { "type": "timeseries", "title": "Mitigation actions / min", "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "targets": [{ "expr": "sum by (action, origin) (rate(netshield_mitigation_actions_total[1m])) * 60", "legendFormat": "{{action}} ({{origin}})" }] },
+    { "type": "timeseries", "title": "Clean p99 latency", "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [{ "expr": "netshield_clean_p99_latency_seconds" }] },
+    { "type": "timeseries", "title": "API latency p95 by route", "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [{ "expr": "histogram_quantile(0.95, sum by (le, route) (rate(netshield_http_request_seconds_bucket[5m])))", "legendFormat": "{{route}}" }] }
+  ]
+}

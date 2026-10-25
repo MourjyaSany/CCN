@@ -1,0 +1,26 @@
+{
+  "hyper": {
+    "arch": "sage",
+    "heads": 4,
+    "hidden_channels": 64,
+    "num_layers": 2,
+    "dropout": 0.3,
+    "aggr": "mean",
+    "lr": 0.008,
+    "weight_decay": 0.0005,
+    "epochs": 120,
+    "patience": 20,
+    "batch_graphs": 16,
+    "class_weighting": true,
+    "seed": 42,
+    "seq_len": 6,
+    "runs_per_batch": 2
+  },
+  "graph_options": {
+    "add_reverse_edges": true,
+    "self_loops": true,
+    "edge_weight_mode": "log_packets"
+  },
+  "in_channels": 46,
+  "backend": "torch-geometric"
+}

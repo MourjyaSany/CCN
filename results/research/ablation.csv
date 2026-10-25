@@ -1,0 +1,4 @@
+Variant,Macro-F1,Δ Macro-F1,PR-AUC,Δ PR-AUC,Slowloris macro-F1
+full model,0.9225,–,0.9688,–,0.8680
+no_edges,0.9260,+0.0035,0.9787,+0.0099,0.8719
+physical_only,0.9177,-0.0048,0.9832,+0.0144,0.8815

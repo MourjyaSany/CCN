@@ -1,0 +1,12 @@
+{
+  "fold": "final__all",
+  "design": "final",
+  "fold_name": "all",
+  "variant": "autoencoder",
+  "detector": "autoencoder",
+  "fit_s": 195.14,
+  "n_train_rows": 92193,
+  "epochs": 60,
+  "best_epoch": 60,
+  "val_infer_us_per_row": 2.940353352920891
+}

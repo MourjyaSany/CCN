@@ -1,0 +1,510 @@
+# =============================================================================
+# NetShield-GNN :: Experiment matrix
+# -----------------------------------------------------------------------------
+# Each entry is a *sparse override* that is deep-merged on top of
+# config/default.yaml. Run one with:
+#     python scripts/run_experiment.py --experiment exp3_syn_flood
+# Run all with:
+#     python scripts/run_experiment.py --all
+# =============================================================================
+
+defaults:
+  simulation:
+    duration_s: 90.0
+    n_iot_devices: 24
+
+experiments:
+
+  # ---------------------------------------------------------------------------
+  exp1_normal:
+    description: >
+      Baseline: 24 legitimate IoT devices only. Establishes the normal operating
+      envelope (throughput, latency, loss) and provides the BENIGN class.
+    tags: ["baseline", "benign"]
+    config:
+      seed: 42
+      simulation: {n_attackers: 0, duration_s: 90.0}
+      attack: {enabled: false}
+
+  # ---------------------------------------------------------------------------
+  exp2_udp_flood:
+    description: >
+      Volumetric UDP flood from 4 compromised IoT nodes towards the cloud MQTT
+      port. Saturates the 20 Mbps gateway uplink.
+    tags: ["volumetric", "udp"]
+    config:
+      seed: 43
+      simulation: {n_attackers: 4, duration_s: 90.0}
+      attack:
+        enabled: true
+        type: "udp_flood"
+        start_s: 30.0
+        duration_s: 30.0
+        packets_per_second: 1400.0
+        packet_bytes: [512, 512]
+        dst_ports: [8883, 5683]
+
+  # ---------------------------------------------------------------------------
+  exp3_syn_flood:
+    description: >
+      Protocol attack: TCP SYN flood with spoofed sources exhausting the cloud
+      server half-open connection backlog. Low bandwidth, high packet rate.
+    tags: ["protocol", "tcp", "syn"]
+    config:
+      seed: 44
+      simulation: {n_attackers: 3, duration_s: 90.0}
+      attack:
+        enabled: true
+        type: "syn_flood"
+        start_s: 30.0
+        duration_s: 30.0
+        packets_per_second: 1800.0
+        packet_bytes: [60, 60]
+        dst_ports: [8883, 80, 443]
+        spoof_sources: true
+        spoof_pool: 96
+
+  # ---------------------------------------------------------------------------
+  exp4_http_flood:
+    description: >
+      Application-layer HTTP GET flood. Requests are individually plausible;
+      only the aggregate rate and the fan-in pattern betray the attack.
+    tags: ["application", "http", "layer7"]
+    config:
+      seed: 45
+      simulation: {n_attackers: 4, duration_s: 90.0}
+      attack:
+        enabled: true
+        type: "http_flood"
+        start_s: 30.0
+        duration_s: 30.0
+        packets_per_second: 320.0
+        packet_bytes: [420, 900]
+        dst_ports: [80, 443]
+
+  # ---------------------------------------------------------------------------
+  exp5_distributed:
+    description: >
+      Distributed low-and-slow botnet on a constrained cellular backhaul. This
+      is the hardest scenario in the suite and the one that motivates the whole
+      project. Thirty-six compromised nodes each emit only ~22 packets/s of
+      CoAP-shaped UDP - the same destination port, the same 200-400 byte packet
+      size and the same steady cadence as a legitimate udp_streamer sensor - so
+      no single device looks anomalous on its own. The gateway backhaul is an
+      NB-IoT/LTE-class 2 Mbps link rather than the 20 Mbps fibre used elsewhere,
+      so the ~800 packets/s aggregate is enough to saturate it and cause real
+      service degradation. A per-node threshold rule is structurally unable to
+      catch this: the evidence exists only in the relation between the bots and
+      their shared aggregation points.
+    tags: ["distributed", "low-and-slow", "stealth", "constrained-backhaul"]
+    config:
+      seed: 46
+      simulation: {n_attackers: 36, duration_s: 100.0}
+      network:
+        topology:
+          gateway:
+            uplink: {bandwidth_bps: 2000000}
+      attack:
+        enabled: true
+        type: "udp_flood"
+        start_s: 35.0
+        duration_s: 40.0
+        packets_per_second: 22.0
+        packet_bytes: [200, 400]
+        dst_ports: [5683]
+
+  # ---------------------------------------------------------------------------
+  exp6_fuzzed:
+    description: >
+      Pulsing / burst attack with fuzzer-selected parameters. Duty-cycled
+      on-off waves defeat simple moving-average thresholds.
+    tags: ["fuzzing", "burst", "pulsing"]
+    config:
+      seed: 47
+      simulation: {n_attackers: 6, duration_s: 100.0}
+      attack:
+        enabled: true
+        type: "udp_flood"
+        start_s: 30.0
+        duration_s: 45.0
+        packets_per_second: 2100.0
+        packet_bytes: [180, 180]
+        dst_ports: [8883, 5683, 1883]
+        burst: {enabled: true, on_s: 2.5, off_s: 3.5}
+
+  # ---------------------------------------------------------------------------
+  exp7_unseen:
+    description: >
+      Generalisation test. Attack parameters (rate, packet size, port set,
+      attacker count, timing) are deliberately outside the ranges used to build
+      the training corpus. No model retraining is permitted for this run.
+    tags: ["generalisation", "held-out"]
+    holdout: true
+    config:
+      seed: 1337
+      simulation: {n_attackers: 7, duration_s: 110.0}
+      attack:
+        enabled: true
+        type: "mixed"
+        start_s: 42.0
+        duration_s: 38.0
+        packets_per_second: 640.0
+        packet_bytes: [96, 1400]
+        dst_ports: [9001, 47808, 5683]
+        burst: {enabled: true, on_s: 4.0, off_s: 1.5}
+        spoof_sources: true
+        spoof_pool: 40
+
+  # ---------------------------------------------------------------------------
+  exp8_mitigation:
+    description: >
+      Closed-loop run. The GraphSAGE detector is executed in-line every feature
+      window; when a node exceeds the trigger probability the mitigation engine
+      installs a rate-limit / block rule at the gateway inside the running
+      simulation. Recovery is measured, not assumed.
+    tags: ["closed-loop", "mitigation"]
+    config:
+      seed: 48
+      simulation: {n_attackers: 6, duration_s: 130.0}
+      attack:
+        enabled: true
+        type: "udp_flood"
+        start_s: 35.0
+        duration_s: 70.0
+        packets_per_second: 1500.0
+        packet_bytes: [512, 512]
+        dst_ports: [8883, 5683]
+      mitigation: {enabled: true}
+      detection: {mitigation_trigger_probability: 0.80}
+
+  # ===========================================================================
+  # Topology-family experiments (exp9-exp14)
+  # ---------------------------------------------------------------------------
+  # Every one of these runs the SAME attack as exp2_udp_flood and changes only
+  # the network structure, so any difference in detector or mitigation
+  # behaviour is attributable to the topology and nothing else. That is the
+  # control that the original single-tree suite could not provide.
+  # ===========================================================================
+
+  exp9_star:
+    description: >
+      Flat star: the whole fleet hangs off one access router. There is no
+      intermediate aggregation, so GraphSAGE's two-hop receptive field sees
+      strictly less structure than in the tree. This is the control condition
+      for the claim that the aggregation hierarchy is what the graph model
+      exploits - if the graph advantage survives here, it was never about
+      hierarchy.
+    tags: ["topology", "star", "control"]
+    config:
+      seed: 60
+      simulation: {n_attackers: 4, duration_s: 90.0}
+      network: {topology: {family: "star"}}
+      attack:
+        enabled: true
+        type: "udp_flood"
+        start_s: 30.0
+        duration_s: 30.0
+        packets_per_second: 1400.0
+        packet_bytes: [512, 512]
+        dst_ports: [8883, 5683]
+
+  exp10_multi_gateway:
+    description: >
+      Three independent gateways, each with its own routers and share of the
+      fleet. The botnet straddles all three enforcement domains, so no single
+      gateway sees the whole attack and mitigation must be installed at every
+      one of them. Tests that enforcement is genuinely distributed rather than
+      incidentally correct because there was only ever one choke point.
+    tags: ["topology", "multi-gateway", "distributed-enforcement"]
+    config:
+      seed: 61
+      simulation: {n_attackers: 6, duration_s: 90.0}
+      network:
+        topology:
+          family: "multi_gateway"
+          multi_gateway: {gateways: 3, routers_per_gateway: 2}
+      attack:
+        enabled: true
+        type: "udp_flood"
+        start_s: 30.0
+        duration_s: 30.0
+        packets_per_second: 1400.0
+        packet_bytes: [512, 512]
+        dst_ports: [8883, 5683]
+
+  exp11_dumbbell:
+    description: >
+      The bottleneck is a constrained backbone span between two gateways, not
+      the edge uplink. The node that enforces (the ingress gateway) is
+      therefore not the link that saturates, which breaks the tree's
+      convenient coincidence between "where the evidence is" and "where the
+      control is".
+    tags: ["topology", "dumbbell", "backbone-bottleneck"]
+    config:
+      seed: 62
+      simulation: {n_attackers: 4, duration_s: 90.0}
+      network:
+        topology:
+          family: "dumbbell"
+          dumbbell: {edge_routers: 3, backbone_bandwidth_factor: 0.4}
+      attack:
+        enabled: true
+        type: "udp_flood"
+        start_s: 30.0
+        duration_s: 30.0
+        packets_per_second: 1400.0
+        packet_bytes: [512, 512]
+        dst_ports: [8883, 5683]
+
+  exp12_fat_tree:
+    description: >
+      Core/aggregation/edge fabric with dual-homed edge routers. The first
+      topology with genuinely redundant paths: a device's traffic can reach the
+      cloud via either aggregation router, so the aggregation evidence the GNN
+      relies on is split across two parents instead of concentrated in one.
+    tags: ["topology", "fat-tree", "multipath"]
+    config:
+      seed: 63
+      simulation: {n_attackers: 5, duration_s: 90.0}
+      network:
+        topology:
+          family: "fat_tree"
+          fat_tree: {aggregation: 2, edge: 4}
+      attack:
+        enabled: true
+        type: "udp_flood"
+        start_s: 30.0
+        duration_s: 30.0
+        packets_per_second: 1400.0
+        packet_bytes: [512, 512]
+        dst_ports: [8883, 5683]
+
+  exp13_mesh:
+    description: >
+      Access routers interconnected as a ring plus chords, multi-homed to the
+      gateway. Shortest-path routing spreads flows across alternative routes,
+      so the per-link load that a volumetric attack produces is no longer
+      concentrated on one predictable path.
+    tags: ["topology", "mesh", "multipath"]
+    config:
+      seed: 64
+      simulation: {n_attackers: 5, duration_s: 90.0}
+      network:
+        topology:
+          family: "mesh"
+          mesh: {routers: 5, extra_links: 3}
+      attack:
+        enabled: true
+        type: "udp_flood"
+        start_s: 30.0
+        duration_s: 30.0
+        packets_per_second: 1400.0
+        packet_bytes: [512, 512]
+        dst_ports: [8883, 5683]
+
+  exp14_ring:
+    description: >
+      Ring of access routers attached to the gateway at a single point. Path
+      lengths differ substantially between devices, so latency is structurally
+      unequal across the fleet even before any attack - a useful stress test
+      for features that implicitly assume a uniform baseline.
+    tags: ["topology", "ring"]
+    config:
+      seed: 65
+      simulation: {n_attackers: 4, duration_s: 90.0}
+      network:
+        topology:
+          family: "ring"
+          ring: {routers: 5}
+      attack:
+        enabled: true
+        type: "udp_flood"
+        start_s: 30.0
+        duration_s: 30.0
+        packets_per_second: 1400.0
+        packet_bytes: [512, 512]
+        dst_ports: [8883, 5683]
+
+  # ===========================================================================
+  # Attack-family and rate-shaping experiments (exp15-exp19)
+  # ===========================================================================
+
+  exp15_icmp_flood:
+    description: >
+      Volumetric ICMP echo flood. ICMP has no ports at all, so port-entropy and
+      service-mix features collapse to zero while packet-rate features spike.
+      A rule that keys on port structure is blind to it by construction.
+    tags: ["attack-family", "icmp", "volumetric"]
+    config:
+      seed: 66
+      simulation: {n_attackers: 4, duration_s: 90.0}
+      attack:
+        enabled: true
+        type: "icmp_flood"
+        start_s: 30.0
+        duration_s: 30.0
+        packets_per_second: 1600.0
+        packet_bytes: [64, 512]
+        dst_ports: [0]
+
+  exp16_ack_flood:
+    description: >
+      Stateless bare-ACK flood. It carries no connection request, so the SYN
+      backlog defence never sees it; what it consumes is forwarding capacity
+      and the server's orphan-segment path. The scenario that justifies
+      modelling per-node forwarding_pps separately from link bandwidth.
+    tags: ["attack-family", "ack", "protocol"]
+    config:
+      seed: 67
+      simulation: {n_attackers: 4, duration_s: 90.0}
+      attack:
+        enabled: true
+        type: "ack_flood"
+        start_s: 30.0
+        duration_s: 30.0
+        packets_per_second: 2000.0
+        packet_bytes: [64, 64]
+        dst_ports: [80, 443, 8883]
+
+  exp17_slowloris:
+    description: >
+      Low-bandwidth application attack. Each bot opens many connections,
+      completes the handshakes and then dribbles a few bytes to hold them open
+      forever, exhausting the server's established-connection table while the
+      link stays almost idle. The sharpest separation in the suite: a per-node
+      rate threshold sees literally nothing, because no bot is loud.
+    tags: ["attack-family", "slowloris", "layer7", "low-bandwidth"]
+    config:
+      seed: 68
+      simulation: {n_attackers: 8, duration_s: 110.0}
+      network:
+        topology:
+          cloud: {max_connections: 160}
+      attack:
+        enabled: true
+        type: "slowloris"
+        start_s: 30.0
+        duration_s: 50.0
+        packets_per_second: 12.0
+        packet_bytes: [64, 128]
+        dst_ports: [80, 443]
+        slowloris: {sockets: 40, keepalive_s: 6.0}
+
+  exp18_ramp:
+    description: >
+      Slow-ramp evasion. The attack begins at 5% of its final rate and climbs
+      linearly across the whole window, so it crosses any static threshold late
+      - by which time the queue is already full. Tests whether a learned
+      detector alarms earlier than a calibrated rule, which is the practical
+      argument for learning at all.
+    tags: ["rate-shaping", "ramp", "evasion"]
+    config:
+      seed: 69
+      simulation: {n_attackers: 6, duration_s: 120.0}
+      attack:
+        enabled: true
+        type: "udp_flood"
+        start_s: 25.0
+        duration_s: 70.0
+        packets_per_second: 1800.0
+        packet_bytes: [512, 512]
+        dst_ports: [8883, 5683]
+        shape: {profile: "ramp", ramp_start_factor: 0.05, ramp_end_factor: 1.0}
+        rate_jitter: [0.7, 1.3]
+        stagger_s: 12.0
+
+  exp19_multivector:
+    description: >
+      Heterogeneous botnet with an explicit family mix and a sinusoidal rate
+      envelope: half the bots are volumetric, a quarter protocol, a quarter
+      application-layer, and every one of them has an independent rate
+      multiplier and join time. This is the closest scenario in the suite to a
+      real multi-vector campaign, and the one where a single-signature defence
+      is least likely to hold.
+    tags: ["attack-family", "multi-vector", "mixed", "rate-shaping"]
+    config:
+      seed: 70
+      simulation: {n_attackers: 10, duration_s: 120.0}
+      attack:
+        enabled: true
+        type: "mixed"
+        start_s: 30.0
+        duration_s: 60.0
+        packets_per_second: 900.0
+        packet_bytes: [128, 1200]
+        dst_ports: [80, 443, 8883, 5683]
+        family_mix: {udp_flood: 0.5, syn_flood: 0.25, http_flood: 0.25}
+        shape: {profile: "sine", sine_period_s: 18.0, sine_depth: 0.6}
+        rate_jitter: [0.6, 1.5]
+        stagger_s: 15.0
+        spoof_sources: true
+        spoof_pool: 64
+
+  # ===========================================================================
+  # Benign stress experiments (exp20-exp22)
+  # ---------------------------------------------------------------------------
+  # Legitimate surges with NO attack. Every node is BENIGN by construction, so
+  # any flag raised here is a false alarm. These are evaluation-only: a
+  # detector that has learned "more traffic = attack" fails them.
+  # ===========================================================================
+
+  exp20_flash_crowd:
+    description: >
+      Flash crowd: every HTTP client raises its request rate 20x for 25 s (a
+      dashboard everyone opens at once). Legitimate, bursty, many-source - the
+      classic look-alike of an application-layer flood.
+    tags: ["benign-stress", "flash-crowd", "evaluation-only"]
+    config:
+      seed: 80
+      simulation: {n_attackers: 0, duration_s: 90.0}
+      attack: {enabled: false}
+      traffic:
+        benign_events:
+          - {type: flash_crowd, start_s: 35.0, duration_s: 25.0, rate_multiplier: 20.0,
+             device_class: http_client, fraction: 1.0}
+
+  exp21_firmware_storm:
+    description: >
+      Fleet-wide OTA update: every bulk uploader starts a 200-400 kB transfer
+      within two seconds. Saturating, synchronised, and entirely legitimate.
+    tags: ["benign-stress", "firmware", "evaluation-only"]
+    config:
+      seed: 81
+      simulation: {n_attackers: 0, duration_s: 90.0}
+      attack: {enabled: false}
+      traffic:
+        benign_events:
+          - {type: firmware_storm, start_s: 35.0, spread_s: 2.0,
+             upload_bytes: [200000, 400000], fraction: 1.0}
+          - {type: firmware_storm, start_s: 55.0, spread_s: 2.0,
+             upload_bytes: [200000, 400000], fraction: 1.0}
+
+  exp22_reboot_storm:
+    description: >
+      Power blip: every MQTT sensor loses its session at once and reconnects
+      within one second - a burst of SYNs from many sources that superficially
+      resembles a SYN flood.
+    tags: ["benign-stress", "reboot", "evaluation-only"]
+    config:
+      seed: 82
+      simulation: {n_attackers: 0, duration_s: 90.0}
+      attack: {enabled: false}
+      traffic:
+        benign_events:
+          - {type: reboot_storm, start_s: 35.0, spread_s: 1.0, down_s: 0.5}
+          - {type: reboot_storm, start_s: 55.0, spread_s: 1.0, down_s: 0.5}
+
+# =============================================================================
+# Dataset generation corpus
+# -----------------------------------------------------------------------------
+# Runs used by scripts/generate_dataset.py to build the labelled training set.
+# exp7_unseen is deliberately EXCLUDED (it is the held-out generalisation set).
+# =============================================================================
+dataset_corpus:
+  base_runs: ["exp1_normal", "exp2_udp_flood", "exp3_syn_flood",
+              "exp4_http_flood", "exp5_distributed", "exp6_fuzzed"]
+  # Additional seeds per base run (increases sample count / seed diversity)
+  seed_replicates: 2
+  # Number of extra fuzzer-generated runs appended to the corpus
+  fuzz_runs: 10
+  fuzz_campaign: "corpus_campaign"

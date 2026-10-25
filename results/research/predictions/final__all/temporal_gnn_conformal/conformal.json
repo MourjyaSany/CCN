@@ -1,0 +1,5 @@
+{
+  "base": "temporal_gnn",
+  "temperature": 1.7076921513148018,
+  "n_calibration": 15197
+}

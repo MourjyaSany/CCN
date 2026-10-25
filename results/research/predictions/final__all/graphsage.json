@@ -1,0 +1,12 @@
+{
+  "fold": "final__all",
+  "design": "final",
+  "fold_name": "all",
+  "variant": "graphsage",
+  "detector": "graphsage",
+  "fit_s": 335.18,
+  "n_train_rows": 92193,
+  "epochs": 25,
+  "best_epoch": 5,
+  "val_infer_us_per_row": 206.8112017694237
+}

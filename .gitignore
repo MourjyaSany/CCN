@@ -1,0 +1,69 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Generated artefacts -------------------------------------------------
+# Everything below is reproducible with `./run.sh all`. Keeping it out of git
+# means a clone stays small and results are never stale relative to the code.
+data/raw/*
+data/processed/*
+data/experiments/*
+data/*.db
+data/*.db-wal
+data/*.db-shm
+models/*
+results/figures/*
+results/metrics/*
+results/reports/*
+results/logs/*
+!**/.gitkeep
+
+# Keep the two hand-written reports that are part of the deliverable.
+!results/reports/.gitkeep
+
+# --- Node / frontend ---
+node_modules/
+frontend/dist/
+frontend/.vite/
+npm-debug.log*
+
+# --- NS-3 ---
+ns3/build/
+ns3/*.pcap
+ns3/*.xml
+
+# --- Editors / OS ---
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- NetShield 2.0 additions -------------------------------------------------
+.tools/
+frontend/node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+frontend-legacy/node_modules/
+data/research/*
+data/external/
+data/audit.db
+data/*.db-journal
+results/research/predictions/*
+!results/research/predictions/final__all/
+results/research/predictions/final__all/*.npz
+results/research/adversary/*.json
+!results/research/adversary/adversary_summary.csv
+# Research figures and the generated research report are part of the deliverable.
+!results/figures/research_*.png
+!results/reports/RESEARCH_RESULTS.md

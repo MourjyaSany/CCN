@@ -1,0 +1,167 @@
+# =============================================================================
+# NetShield-GNN :: Dynamic fuzzing campaigns
+# -----------------------------------------------------------------------------
+# The fuzzer mutates ATTACK PARAMETERS ONLY, inside the simulated topology.
+# It never touches a real network interface and never emits a real packet.
+#
+# Strategies
+#   grid     : full cartesian sweep of the declared value lists (deterministic)
+#   random   : uniform / log-uniform sampling from the declared ranges
+#   mutation : seeded mutation of a baseline vector (delta-based, reproducible)
+#   adaptive : greedy search that preferentially re-mutates parameter vectors
+#              which the detector under test scored *worst* on (evasion search)
+# =============================================================================
+
+campaigns:
+
+  # ---------------------------------------------------------------------------
+  rate_sweep:
+    description: >
+      Textbook 1-D robustness sweep: hold everything constant, vary only the
+      per-attacker packet rate across a decade of magnitude.
+    strategy: "grid"
+    seed: 100
+    base: "exp2_udp_flood"
+    space:
+      attack.packets_per_second: [500.0, 750.0, 1000.0, 1500.0, 2500.0, 5000.0]
+
+  # ---------------------------------------------------------------------------
+  packet_size_sweep:
+    description: "Vary L3 payload size from minimum-size to near-MTU."
+    strategy: "grid"
+    seed: 101
+    base: "exp2_udp_flood"
+    space:
+      attack.packet_bytes: [[64,64], [128,128], [512,512], [1024,1024], [1400,1400]]
+
+  # ---------------------------------------------------------------------------
+  burst_sweep:
+    description: "Pulsing-attack duty-cycle sweep (on/off wave shaping)."
+    strategy: "grid"
+    seed: 102
+    base: "exp6_fuzzed"
+    space:
+      attack.burst.on_s:  [0.5, 1.0, 2.0, 4.0]
+      attack.burst.off_s: [0.5, 2.0, 5.0]
+
+  # ---------------------------------------------------------------------------
+  botnet_size_sweep:
+    description: "Constant aggregate volume, varying number of attacking nodes."
+    strategy: "grid"
+    seed: 103
+    base: "exp2_udp_flood"
+    space:
+      simulation.n_attackers: [2, 4, 8, 16]
+
+  # ---------------------------------------------------------------------------
+  random_broad:
+    description: >
+      Broad randomised campaign across the full attack parameter space. Used to
+      build the fuzzed portion of the training corpus and to stress-test the
+      detectors on parameter combinations no human chose.
+    strategy: "random"
+    seed: 200
+    base: "exp2_udp_flood"
+    n_samples: 24
+    space:
+      attack.type:
+        choice: ["udp_flood", "syn_flood", "http_flood", "mixed"]
+      attack.packets_per_second:
+        loguniform: [120.0, 4000.0]
+      attack.packet_bytes:
+        pair_uniform: [64, 1400]
+      attack.start_s:
+        uniform: [20.0, 45.0]
+      attack.duration_s:
+        uniform: [15.0, 45.0]
+      attack.dst_ports:
+        subset: [80, 443, 1883, 8883, 5683, 9001, 47808, 22]
+        size: [1, 3]
+      attack.burst.enabled:
+        choice: [true, false]
+      attack.burst.on_s:
+        uniform: [0.4, 5.0]
+      attack.burst.off_s:
+        uniform: [0.4, 5.0]
+      attack.spoof_sources:
+        choice: [true, false]
+      simulation.n_attackers:
+        int_uniform: [2, 14]
+
+  # ---------------------------------------------------------------------------
+  corpus_campaign:
+    description: >
+      The campaign referenced by config/experiments.yaml::dataset_corpus. Kept
+      narrower than random_broad so that dataset generation stays fast, while
+      still covering all four attack families.
+
+      Note on the rate range: for udp_flood and syn_flood, packets_per_second is
+      literally packets per second, but an http_flood expands each unit into a
+      complete TCP transaction (handshake, request, response, teardown - roughly
+      8 packets). The upper bound is therefore kept at 900 so that a 10-bot HTTP
+      case stays inside the per-run wall-clock budget rather than being
+      truncated. Wider ranges live in the random_broad campaign, which is used
+      for robustness analysis rather than for corpus construction.
+    strategy: "random"
+    seed: 300
+    base: "exp2_udp_flood"
+    n_samples: 10
+    space:
+      attack.type:
+        choice: ["udp_flood", "syn_flood", "http_flood", "mixed"]
+      attack.packets_per_second:
+        loguniform: [150.0, 900.0]
+      attack.packet_bytes:
+        pair_uniform: [64, 1200]
+      attack.start_s:
+        uniform: [22.0, 40.0]
+      attack.duration_s:
+        uniform: [20.0, 35.0]
+      attack.burst.enabled:
+        choice: [true, false]
+      attack.burst.on_s:
+        uniform: [0.5, 4.0]
+      attack.burst.off_s:
+        uniform: [0.5, 4.0]
+      simulation.n_attackers:
+        int_uniform: [2, 10]
+
+  # ---------------------------------------------------------------------------
+  mutation_walk:
+    description: >
+      Seeded mutation walk around the exp2 baseline. Each generation perturbs a
+      random subset of parameters by a bounded multiplicative delta.
+    strategy: "mutation"
+    seed: 400
+    base: "exp2_udp_flood"
+    n_samples: 12
+    mutation:
+      mutation_rate: 0.4          # probability each parameter is perturbed
+      scale: 0.5                  # +/- 50% multiplicative delta
+    space:
+      attack.packets_per_second: {loguniform: [100.0, 6000.0]}
+      attack.duration_s: {uniform: [10.0, 50.0]}
+      attack.start_s: {uniform: [20.0, 50.0]}
+      simulation.n_attackers: {int_uniform: [1, 16]}
+
+  # ---------------------------------------------------------------------------
+  evasion_search:
+    description: >
+      Adaptive (greedy) evasion search. Objective = minimise the detector's
+      recall on the attacker nodes. Reveals the parameter region where the
+      detector is weakest; results feed the Limitations section of the report.
+    strategy: "adaptive"
+    seed: 500
+    base: "exp2_udp_flood"
+    n_samples: 12
+    population: 4
+    mutation:
+      mutation_rate: 0.5
+      scale: 0.6
+    space:
+      attack.packets_per_second: {loguniform: [80.0, 2000.0]}
+      attack.packet_bytes: {pair_uniform: [64, 1400]}
+      attack.burst.enabled: {choice: [true, false]}
+      attack.burst.on_s: {uniform: [0.3, 4.0]}
+      attack.burst.off_s: {uniform: [0.3, 6.0]}
+      simulation.n_attackers: {int_uniform: [2, 16]}

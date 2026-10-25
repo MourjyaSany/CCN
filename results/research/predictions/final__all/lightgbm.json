@@ -1,0 +1,12 @@
+{
+  "fold": "final__all",
+  "design": "final",
+  "fold_name": "all",
+  "variant": "lightgbm",
+  "detector": "lightgbm",
+  "fit_s": 51.61,
+  "n_train_rows": 92193,
+  "epochs": 246,
+  "best_epoch": 246,
+  "val_infer_us_per_row": 58.84443899055212
+}
