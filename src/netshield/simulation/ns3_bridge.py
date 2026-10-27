@@ -696,6 +696,13 @@ def environment_report() -> dict[str, Any]:
         tools[tool] = path or "not found"
 
     probe = detect_ns3()
+    # The primary engine on this platform is NS-3-in-WSL; probe it too.
+    try:
+        from .ns3_wsl import detect as _detect_wsl  # noqa: PLC0415
+
+        wsl = _detect_wsl().to_dict()
+    except Exception:  # noqa: BLE001 - never let a probe break the report
+        wsl = {"available": False, "reason": "probe failed"}
     return {
         "python": {
             "version": sys.version.split()[0],
@@ -706,6 +713,8 @@ def environment_report() -> dict[str, Any]:
         "missing_libraries": missing,
         "tools": tools,
         "ns3": probe.to_dict(),
+        "ns3_wsl": wsl,
+        "primary_engine": "ns3" if wsl.get("available") else "python",
         "repo_root": str(repo_root()),
     }
 

@@ -31,7 +31,7 @@ from typing import Any, Mapping
 import numpy as np
 
 from ..utils.config import Config
-from .topology import NodeKind, build_topology
+from .topology import build_topology
 
 #: Attack family -> (uses_tcp, destination port, is_approximation).
 ATTACK_MAP: dict[str, tuple[bool, int, bool]] = {

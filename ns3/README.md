@@ -1,3 +1,19 @@
+# NS-3 (primary engine)
+
+The **primary** NS-3 model is in [`ns3/netshield/`](netshield/): a generic,
+spec-driven model that builds whatever node-and-link graph the Python side
+emits, so all seven topology families are real NS-3 networks. Python drives it
+via [`ns3_spec.py`](../src/netshield/simulation/ns3_spec.py) (scenario to spec),
+[`ns3_wsl.py`](../src/netshield/simulation/ns3_wsl.py) (run it, in WSL on
+Windows) and [`ns3_run.py`](../src/netshield/simulation/ns3_run.py) (assemble
+the result). Set it up with `python scripts/setup_ns3.py`.
+
+The older single-file model in [`simulations/`](simulations/) targets ns-3.44
+and covers tree/star/dumbbell with built-in traffic generators; it is kept for
+reference and cross-checking. The notes below describe that older model.
+
+---
+
 # NS-3 integration
 
 ## Status

@@ -46,7 +46,8 @@ finished steps. Useful flags: `--no-browser`, `--port 8080`, `--fresh`,
 | Testbed | Mininet + Open vSwitch topology and agent; OpenFlow, nftables and P4Runtime rule export |
 | Platform | IPFIX collector, Redis Streams pipeline, ONNX Runtime serving, JWT + RBAC, human approval queue, hash-chained audit log, Prometheus + Grafana, STIX 2.1 and CEF export, TimescaleDB schema, CI with coverage and benchmark gates |
 | Console | React + TypeScript operations console: live topology, per-alert explanations (integrated gradients), synced incident timeline, approvals, replay, research results, command palette, dark mode |
-| Speed | simulator 1.6x faster (buffered random draws) |
+| Engine | NS-3 is now the **primary** engine: real NS-3 networks built node-for-node for all seven topologies, run in WSL2 on Windows and natively on Linux, set up by one command |
+| Speed | Python fallback engine 1.6x faster (buffered random draws) |
 
 Read [`docs/RESEARCH_PROTOCOL.md`](docs/RESEARCH_PROTOCOL.md) for the methods,
 [`results/reports/RESEARCH_RESULTS.md`](results/reports/RESEARCH_RESULTS.md)
@@ -305,61 +306,57 @@ than after a simulation.
 
 ## Simulation engines and provenance
 
-The project has **two** working simulation engines, and every artefact is
-stamped with the one that produced it — the `engine` / `engine_label` fields of
-each `run.json`, the `engine` column of `dataset.csv`, the provenance caption of
-every figure and the header of `RESULTS.md`.
+NS-3 is the **primary** engine. A scenario is turned into an exact
+node-and-link specification and handed to a real NS-3 model, which builds that
+network and runs genuine application and attack traffic over the real TCP/IP
+stack. The Python discrete-event engine is the fast, fully-featured fallback
+(and the only engine that enforces the closed mitigation loop). Every artefact
+is stamped with the engine that produced it: the `engine` field of each
+`run.json`, the `engine` column of `dataset.csv`, and the provenance caption of
+every figure.
 
-### The Python reference engine (default)
+### NS-3 (primary)
 
-A genuine discrete-event simulator: store-and-forward switching, finite
-drop-tail queues, serialisation delay `8S/B`, propagation delay, per-node
-processing servers, a finite SYN backlog, a finite connection table and Reno
-TCP. Latency, loss and throughput are **emergent**, never configured.
+The model lives in [`ns3/netshield/`](ns3/netshield/). The whole topology is
+**data**: Python ([`ns3_spec.py`](src/netshield/simulation/ns3_spec.py)) emits
+every node and link for any of the seven families, and the C++ builds it
+generically — so a multi-gateway fabric or a mesh is a genuine NS-3 network of
+real IoT end devices in their hierarchy, not a hard-coded shape. All traffic is
+produced by NS-3's own application generators sending from each node's real
+address through the real stack; the model never crafts a packet or forges an
+address. Latency, loss and throughput are emergent, and the flow telemetry it
+exports uses the project's own schema, so feature extraction, graph
+construction and the detectors consume NS-3 output unchanged.
 
-It is the reference implementation: all seven topology families, all six attack
-families, the rate-shaping waveforms and the closed mitigation loop live here.
-
-### NS-3 (ns-3.44, opt-in)
-
-`ns3/simulations/netshield-topology.cc` is a real NS-3 model that **is compiled
-and executed** — not a shipped-but-unused artefact. Run any experiment inside
-it with:
+NS-3's shared libraries do not initialise on native Windows, so on Windows the
+model runs inside **WSL2** (installed and driven automatically); on Linux it
+runs directly. One command sets it up from a clean machine:
 
 ```bash
-python scripts/run_experiment.py --experiment exp2_udp_flood --set simulation.engine=ns3
+python scripts/setup_ns3.py        # WSL2 + Ubuntu + NS-3 + the model, then verifies
+python scripts/setup_ns3.py --check
 ```
 
-`netshield.simulation.ns3_bridge.detect_ns3` performs a real capability probe —
-a native `ns3` CLI, **a built tree inside a WSL distribution**, or the Python
-bindings — and never guesses. With `simulation.engine: ns3` a missing
-installation raises `NS3Unavailable`; it is never a silent fallback.
+Then any scenario runs in NS-3 (the default when it is available):
 
-**`simulation.engine: auto` resolves to the Python engine even when NS-3 is
-installed**, and logs how to opt in. That is deliberate: NS-3 implements a
-subset of the model, so letting `auto` switch per-scenario would make the
-training corpus a mixture of two simulators while the closed-loop evaluation
-stayed on one — a train/test mismatch. A corpus is always single-engine.
+```bash
+python scripts/run_experiment.py --experiment exp13_mesh --set simulation.engine=ns3
+```
 
-Anything the C++ model cannot honour is reported rather than approximated:
-`summary.ns3_unsupported` in `run.json` lists every such setting, and
-`summary.ns3_unmeasured_metrics` lists the columns NS-3 did not measure, so
-"measured zero" is never confused with "not measured".
+Attack-family fidelity: volumetric UDP and application HTTP floods are genuine;
+SYN, ACK, ICMP and slowloris run as labelled offered-load approximations on the
+relevant transport and port; source spoofing is not reproduced. Each run
+records exactly which approximations applied in `run.json`.
 
-### Cross-validation
+### The Python discrete-event engine (fallback, closed loop)
 
-The two engines are independent implementations, so their agreement is evidence:
-
-| Quantity | Configured | Python engine | NS-3 |
-|---|---:|---:|---:|
-| Benign one-way latency | 16.5 ms path delay | ≈17 ms | **17.32 ms** |
-| Uplink saturation | 20 Mbit/s | saturates | **20.6 Mbit/s** |
-
-Under a UDP flood NS-3 independently reproduces latency climbing from 17.4 ms to
-300–740 ms, loss rising to ~30%, and full recovery afterwards. Details and the
-full fidelity table: [`ns3/README.md`](ns3/README.md).
-
----
+A genuine discrete-event simulator: store-and-forward switching, finite
+drop-tail queues, serialisation and propagation delay, per-node processing
+servers, a finite SYN backlog, a finite connection table and Reno TCP. It
+implements all seven topologies, all six attack families, the rate-shaping
+waveforms and — uniquely — the closed mitigation loop, so closed-loop runs
+always use it. It is also the engine the committed research corpus was built
+with, kept fixed so those results are reproducible.
 
 ## Safety and ethics
 

@@ -40,8 +40,8 @@ def repo_root() -> Path:
 
 @pytest.fixture(scope="session")
 def base_config() -> Config:
-    """The default merged configuration."""
-    return load_config()
+    """The default merged configuration (Python engine, for fast tests)."""
+    return load_config().with_set(["simulation.engine=python"])
 
 
 @pytest.fixture(scope="session")
@@ -49,6 +49,7 @@ def benign_config() -> Config:
     """A short benign scenario."""
     cfg, _ = experiment_config("exp1_normal")
     return cfg.with_set([
+        "simulation.engine=python",
         f"simulation.duration_s={TEST_DURATION_S}",
         "simulation.n_iot_devices=10",
         "network.topology.routers.count=2",
@@ -72,6 +73,7 @@ def attack_config() -> Config:
     """
     cfg, _ = experiment_config("exp2_udp_flood")
     return cfg.with_set([
+        "simulation.engine=python",
         f"simulation.duration_s={TEST_DURATION_S}",
         "simulation.n_iot_devices=10",
         "simulation.n_attackers=3",
@@ -87,6 +89,7 @@ def syn_flood_config() -> Config:
     """A short SYN-flood scenario with spoofed sources."""
     cfg, _ = experiment_config("exp3_syn_flood")
     return cfg.with_set([
+        "simulation.engine=python",
         f"simulation.duration_s={TEST_DURATION_S}",
         "simulation.n_iot_devices=8",
         "simulation.n_attackers=2",

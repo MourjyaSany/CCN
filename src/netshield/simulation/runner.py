@@ -404,17 +404,45 @@ def run_simulation(
     seed = int(config.get("seed", 42))
     seed_everything(seed)
 
+    # NS-3 is the primary engine. On this platform it runs inside WSL; the
+    # native-Windows NS-3 path and the Python discrete-event engine are
+    # fallbacks. The ``engine`` stamp always names what actually produced the
+    # artefacts.
+    policy = str(config.get("simulation.engine", "auto")).lower()
+    # Closed-loop mitigation is enforced inside the Python engine's packet
+    # path; the NS-3 model runs open-loop. So an "auto" run that carries a
+    # controller stays on the Python engine, while "ns3"/"wsl" is honoured
+    # (open-loop) if explicitly requested.
+    want_ns3 = policy in ("ns3", "wsl") or (policy == "auto" and controller_factory is None)
+    if want_ns3:
+        from .ns3_wsl import detect as _detect_wsl  # noqa: PLC0415
+
+        wsl_probe = _detect_wsl()
+        if wsl_probe.available:
+            reason = f"NS-3 {wsl_probe.version} in WSL ({wsl_probe.distro})"
+            _LOG.info("Engine: %s", reason)
+            from .ns3_run import execute as _ns3_wsl_execute  # noqa: PLC0415
+
+            return _ns3_wsl_execute(
+                config=config, meta=meta, probe=wsl_probe, engine_reason=reason,
+                run_id=build_run_id(config, meta), result_class=SimulationResult,
+                closed_loop=controller_factory is not None,
+            )
+        if policy in ("ns3", "wsl"):
+            from .ns3_wsl import NS3Unavailable  # noqa: PLC0415
+
+            raise NS3Unavailable(
+                f"simulation.engine={policy!r} but NS-3 is not runnable: "
+                f"{wsl_probe.reason}")
+        _LOG.warning("NS-3 (WSL) unavailable (%s); trying native NS-3 then the "
+                     "Python engine.", wsl_probe.reason)
+
     engine_id, engine_reason = resolve_engine(
         str(config.get("simulation.engine", "auto")),
         probe=ns3_probe,
     )
     if engine_id == ENGINE_NS3:
-        # The NS-3 path is selected only when an actual installation was probed
-        # successfully; the C++ model in ns3/ is then the source of truth, and
-        # the run is executed there rather than here. Returning early is what
-        # keeps the `engine` stamp honest: previously this branch only logged,
-        # and the Python engine then produced artefacts labelled "NS-3".
-        _LOG.info("Engine resolved to NS-3: %s", engine_reason)
+        _LOG.info("Engine resolved to NS-3 (native): %s", engine_reason)
         from .ns3_runner import execute as _ns3_execute  # noqa: PLC0415
 
         probe = ns3_probe if ns3_probe is not None else detect_ns3()
