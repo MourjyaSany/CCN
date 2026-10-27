@@ -230,12 +230,18 @@ def main() -> int:
                     help="Also start the streaming pipeline services.")
     ap.add_argument("--setup-only", action="store_true", help="Install and train, do not serve.")
     ap.add_argument("--skip-frontend-build", action="store_true")
+    ap.add_argument("--ns3", action="store_true",
+                    help="Also set up the NS-3 primary engine (WSL2 + NS-3 build; "
+                         "needs administrator approval once).")
     args = ap.parse_args()
     os.chdir(ROOT)
     print("NetShield-GNN launcher  (Ctrl+C to stop at any time)")
     ensure_python(args.fresh)
     ensure_frontend(args.skip_frontend_build)
     ensure_models()
+    if args.ns3:
+        step("Setting up the NS-3 primary engine")
+        run([PY, "scripts/setup_ns3.py"])
     if args.setup_only:
         step("Setup complete")
         return 0
