@@ -23,3 +23,6 @@ egraphsage,exp22_reboot_storm,0.0,0.0,0.0,84
 graphsage,exp20_flash_crowd,0.05403476907109497,4.738095238095238,33.05555555555555,84
 graphsage,exp21_firmware_storm,0.0,0.0,0.0,84
 graphsage,exp22_reboot_storm,0.0,0.0,0.0,84
+temporal_gnn,exp20_flash_crowd,0.04612091333679294,3.75,28.21428571428571,84
+temporal_gnn,exp21_firmware_storm,3.2547845332638976e-05,0.011904761904761904,0.01984126984126984,84
+temporal_gnn,exp22_reboot_storm,0.0,0.0,0.0,84

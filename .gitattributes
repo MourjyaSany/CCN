@@ -1,0 +1,9 @@
+* text=auto
+*.sh text eol=lf
+start.sh text eol=lf
+run.sh text eol=lf
+*.bat text eol=crlf
+*.png binary
+*.pt binary
+*.joblib binary
+*.npy binary

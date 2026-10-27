@@ -87,3 +87,14 @@ exp3_syn_flood,84,84,0,28,graphsage
 exp4_http_flood,112,112,0,28,graphsage
 exp5_distributed,144,144,0,4,graphsage
 exp6_fuzzed,24,24,0,4,graphsage
+exp15_icmp_flood,112,112,0,28,temporal_gnn
+exp16_ack_flood,112,112,0,28,temporal_gnn
+exp17_slowloris,224,224,0,28,temporal_gnn
+exp18_ramp,24,24,0,4,temporal_gnn
+exp19_multivector,40,40,0,4,temporal_gnn
+exp1_normal,0,0,0,28,temporal_gnn
+exp2_udp_flood,112,112,0,28,temporal_gnn
+exp3_syn_flood,84,84,0,28,temporal_gnn
+exp4_http_flood,112,112,0,28,temporal_gnn
+exp5_distributed,144,144,0,4,temporal_gnn
+exp6_fuzzed,24,24,0,4,temporal_gnn
