@@ -128,6 +128,7 @@ def execute(
     run_id: str,
     result_class: Any,
     closed_loop: bool = False,
+    anim_path: "Path | None" = None,
 ) -> Any:
     """Run the scenario in NS-3 and return a populated result.
 
@@ -141,6 +142,8 @@ def execute(
             circular import with :mod:`netshield.simulation.runner`).
         closed_loop: Whether the caller asked for in-loop mitigation. The NS-3
             model runs open-loop, so this is recorded as an approximation.
+        anim_path: When set, a NetAnim trace of the run is written to this
+            path so it can be opened in the NS-3 animator.
 
     Returns:
         A result bundle stamped with :data:`ENGINE_NS3`.
@@ -150,6 +153,7 @@ def execute(
     topo = build_topology(config)
     window_s = float(config.require("features.window_s"))
     duration = float(config.require("simulation.duration_s"))
+    anim_saved: str | None = None
 
     with tempfile.TemporaryDirectory(prefix="netshield-ns3-") as tmp:
         out_dir = Path(tmp)
@@ -157,7 +161,8 @@ def execute(
         # The NS-3 model (running in WSL) must write to the WSL view of the
         # output directory; Python then reads the same files from the Windows
         # path. On a native Linux host the two paths coincide.
-        prov = write_spec(config, win_to_wsl(out_dir), spec_path)
+        anim_wsl = win_to_wsl(out_dir / "netanim.xml") if anim_path else None
+        prov = write_spec(config, win_to_wsl(out_dir), spec_path, anim_file=anim_wsl)
         proc = run_model(spec_path)
         flows = _read_csv(out_dir / "ns3_flows.csv")
         windows = _window_rows(_read_csv(out_dir / "ns3_windows.csv"), window_s)
@@ -165,6 +170,11 @@ def execute(
         meta_path = out_dir / "ns3_run.json"
         if meta_path.exists():
             ns3_meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        # Copy the animation trace out of the temp dir before it is cleaned.
+        if anim_path and (out_dir / "netanim.xml").exists():
+            anim_path.parent.mkdir(parents=True, exist_ok=True)
+            anim_path.write_bytes((out_dir / "netanim.xml").read_bytes())
+            anim_saved = str(anim_path)
 
     approximations = list(prov.get("ns3_approximations", []))
     if closed_loop:
@@ -199,6 +209,7 @@ def execute(
         else {},
         "ns3_approximations": approximations,
         "ns3_spec": {k: v for k, v in prov.items() if k != "node_index"},
+        "ns3_anim_file": anim_saved,
         "wall_seconds": proc.get("wall_s"),
     }
     return result_class(
@@ -218,3 +229,40 @@ def execute(
         topology=topo_desc,
         summary=summary,
     )
+
+
+def run_and_save_animated(config: Config, meta: Mapping[str, Any], save_root: Path) -> Any:
+    """Run a scenario in NS-3 with a NetAnim trace and save everything.
+
+    This is the entry point the API uses for "run in NS-3 and visualise". It
+    probes WSL/NS-3, runs the scenario (open-loop), writes the NetAnim trace
+    into the run directory next to the usual artefacts, and returns the saved
+    :class:`SimulationResult`.
+
+    Args:
+        config: The scenario configuration (NS-3 is forced).
+        meta: Experiment metadata.
+        save_root: The ``data/experiments`` directory.
+
+    Returns:
+        The saved result; ``result.summary['ns3_anim_file']`` is the trace path.
+
+    Raises:
+        NS3Unavailable: If NS-3 is not runnable.
+    """
+    from .runner import SimulationResult, build_run_id  # noqa: PLC0415
+    from .ns3_wsl import NS3Unavailable, detect  # noqa: PLC0415
+
+    probe = detect()
+    if not probe.available:
+        raise NS3Unavailable(f"NS-3 is not runnable: {probe.reason}")
+    run_id = build_run_id(config, meta)
+    run_dir = Path(save_root) / run_id
+    result = execute(
+        config=config, meta=meta, probe=probe,
+        engine_reason=f"NS-3 {probe.version} in WSL ({probe.distro})",
+        run_id=run_id, result_class=SimulationResult, closed_loop=False,
+        anim_path=run_dir / "netanim.xml",
+    )
+    result.save(run_dir)
+    return result

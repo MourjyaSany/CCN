@@ -15,6 +15,7 @@ import { Mitigations } from "@/pages/Mitigations";
 import { Research } from "@/pages/Research";
 import { Replay } from "@/pages/Replay";
 import { AttackBuilder, Experiments, Policy, Topologies } from "@/pages/Configure";
+import { Ns3 } from "@/pages/Ns3";
 import { About, Login } from "@/pages/About";
 
 function Routed() {
@@ -31,6 +32,7 @@ function Routed() {
           <Route path="/experiments" element={<Experiments />} />
           <Route path="/research" element={<Research />} />
           <Route path="/replay" element={<Replay />} />
+          <Route path="/ns3" element={<Ns3 />} />
           <Route path="/attack-builder" element={<AttackBuilder />} />
           <Route path="/topologies" element={<Topologies />} />
           <Route path="/policy" element={<Policy />} />

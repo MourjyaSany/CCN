@@ -40,6 +40,10 @@
 #include "ns3/tcp-header.h"
 #include "ns3/traffic-control-module.h"
 #include "ns3/udp-header.h"
+#include "ns3/mobility-module.h"
+#ifdef NETSHIELD_ANIM
+#include "ns3/netanim-module.h"
+#endif
 
 #include <algorithm>
 #include <cmath>
@@ -545,6 +549,55 @@ main(int argc, char* argv[])
     if (s.attackEnabled && !botApps.empty() && (s.profile != "constant" || s.burst))
     {
         ScheduleWaveform(botApps, s);
+    }
+
+    // ---- optional NetAnim animation --------------------------------------
+    // When the spec sets anim_file, lay the nodes out by tier and write a
+    // NetAnim trace so the run can be watched in the NS-3 animator GUI. This
+    // is for small demonstration scenarios; an animation of a full flood would
+    // be unreadable, so the Python side only sets anim_file for short runs.
+    const std::string animFile = s.S("anim_file", "");
+    if (!animFile.empty())
+    {
+        MobilityHelper mobility;
+        mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
+        mobility.Install(nodes);
+        // Place each node by tier: cloud top-centre, then gateways, routers,
+        // and the device fleet spread along the bottom row.
+        std::map<int, std::vector<uint32_t>> byTier;
+        for (uint32_t i = 0; i < s.nodes.size(); ++i)
+        {
+            byTier[s.nodes[i].tier].push_back(i);
+        }
+        for (auto& [tier, idxs] : byTier)
+        {
+            const double span = 100.0;
+            const double step = idxs.size() > 1 ? span / (idxs.size() - 1) : 0.0;
+            for (size_t j = 0; j < idxs.size(); ++j)
+            {
+                const double x = idxs.size() > 1 ? j * step : span / 2.0;
+                const double y = tier * 25.0;
+                nodes.Get(idxs[j])->GetObject<MobilityModel>()->SetPosition(
+                    Vector(x, y, 0.0));
+            }
+        }
+#ifdef NETSHIELD_ANIM
+        AnimationInterface* anim = new AnimationInterface(animFile);
+        anim->EnablePacketMetadata(true);
+        anim->SetMaxPktsPerTraceFile(500000);
+        for (uint32_t i = 0; i < s.nodes.size(); ++i)
+        {
+            anim->UpdateNodeDescription(nodes.Get(i), s.nodes[i].id);
+            if (s.nodes[i].kind == "cloud")
+                anim->UpdateNodeColor(nodes.Get(i), 0, 120, 255);
+            else if (s.nodes[i].kind == "gateway" || s.nodes[i].kind == "router")
+                anim->UpdateNodeColor(nodes.Get(i), 150, 150, 150);
+            else if (s.nodes[i].attacker)
+                anim->UpdateNodeColor(nodes.Get(i), 230, 50, 50);
+            else
+                anim->UpdateNodeColor(nodes.Get(i), 40, 190, 90);
+        }
+#endif
     }
 
     // ---- tracing ----------------------------------------------------------

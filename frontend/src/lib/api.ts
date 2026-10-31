@@ -70,4 +70,10 @@ export const api = {
   audit: () => request<{ chain_valid: boolean; entries: any[] }>("/api/audit?limit=300"),
   attacks: () => request<any[]>("/api/attacks"),
   topologies: () => request<any[]>("/api/topologies"),
+  // --- NS-3 engine + NetAnim ---
+  ns3Status: () => request<{ available: boolean; version?: string; distro?: string; netanim_available?: boolean; wsl_cores?: string; wsl_kernel?: string; reason?: string }>("/api/ns3/status"),
+  ns3Animate: (body: { scenario: string; duration_s?: number; overrides?: Record<string, unknown> }) =>
+    post<{ run_id: string; engine: string; topology: string; n_nodes: number; n_links: number; packets_generated: number; loss_ratio: number; anim_available: boolean; approximations: string[] }>("/api/ns3/animate", body),
+  netanimOpen: (run_id: string) => post<{ opened: boolean; run_id: string; pid: number | null }>("/api/ns3/netanim/open", { run_id }),
+  ns3Runs: () => request<Array<{ run_id: string; experiment: string; topology: string; engine: string; packets: number; generated_at: string }>>("/api/ns3/runs"),
 };

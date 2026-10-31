@@ -35,6 +35,7 @@ WSL_DISTRO = os.environ.get("NETSHIELD_WSL_DISTRO", "Ubuntu-24.04")
 NS3_DIR = os.environ.get("NETSHIELD_NS3_DIR", "/opt/ns-3.48")
 NS3_USER = os.environ.get("NETSHIELD_NS3_USER", "ns")
 EXE_REL = "build/scratch/netshield/ns3.48-netshield-sim-optimized"
+NETANIM_BIN = os.environ.get("NETSHIELD_NETANIM", "/home/ns/netanim/build/netanim")
 ENGINE_NS3 = "ns3-simulation"
 
 
@@ -144,10 +145,62 @@ def run_model(spec_win_path: str | Path, timeout_s: float = 3600.0) -> dict[str,
             "stderr": (proc.stderr or "").strip(), "wall_s": round(wall, 2)}
 
 
+def netanim_available() -> bool:
+    """True when the NetAnim GUI binary is present in WSL."""
+    wsl = _wsl()
+    if not wsl:
+        return bool(shutil.which("netanim"))
+    try:
+        probe = _wsl_bash(f"test -x {NETANIM_BIN} && echo OK", 20.0, check=False)
+        return "OK" in (probe.stdout or "")
+    except (subprocess.TimeoutExpired, NS3Unavailable):
+        return False
+
+
+def launch_netanim(trace_win_path: str | Path) -> dict[str, Any]:
+    """Open the NetAnim GUI on a trace file (a desktop window via WSLg).
+
+    Args:
+        trace_win_path: Path to the NetAnim ``.xml`` trace (Windows or WSL).
+
+    Returns:
+        ``{"launched": bool, "pid": int|None, "reason": str}``.
+    """
+    if not netanim_available():
+        return {"launched": False, "pid": None,
+                "reason": f"NetAnim GUI not found at {NETANIM_BIN}"}
+    trace = win_to_wsl(trace_win_path)
+    # Copy the trace to WSL-local storage first: NetAnim scrubs the file
+    # continuously, and reading a multi-MB trace over the /mnt mount is slow.
+    # setsid detaches the GUI so it keeps running after this call returns.
+    script = (f"test -f '{trace}' || {{ echo 'trace not found' >&2; exit 2; }}; "
+              f"mkdir -p ~/.netshield-anim; N=$(basename $(dirname '{trace}')); "
+              f"L=~/.netshield-anim/$N.xml; cp -f '{trace}' \"$L\"; "
+              f"export DISPLAY=${{DISPLAY:-:0}}; export QT_QPA_PLATFORM=xcb; "
+              f"setsid {NETANIM_BIN} \"$L\" >/tmp/netanim.log 2>&1 "
+              f"< /dev/null & disown; sleep 1; pgrep -n -f netanim/build/netanim "
+              f"| sed 's/^/PID=/'")
+    try:
+        proc = _wsl_bash(script, 30.0, check=False)
+    except subprocess.TimeoutExpired:
+        return {"launched": False, "pid": None, "reason": "launch timed out"}
+    out = (proc.stdout or "")
+    if proc.returncode != 0 or "PID=" not in out:
+        return {"launched": False, "pid": None,
+                "reason": (proc.stderr or out).strip()[:200] or "launch failed"}
+    pid = None
+    for line in out.splitlines():
+        if line.startswith("PID="):
+            digits = line[4:].strip()
+            pid = int(digits) if digits.isdigit() else None
+    return {"launched": True, "pid": pid, "reason": "", "trace": trace}
+
+
 def environment_report() -> dict[str, Any]:
     """Return a probe of the WSL/NS-3 environment for the dashboard/CLI."""
     probe = detect()
     report = probe.to_dict()
+    report["netanim_available"] = netanim_available() if probe.available else False
     if probe.available:
         try:
             info = _wsl_bash("nproc; uname -r", 20.0, check=False)

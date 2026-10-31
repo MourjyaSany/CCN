@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Command } from "cmdk";
 import {
-  Activity, BookOpen, Boxes, FlaskConical, GaugeCircle, History, LayoutDashboard, LogOut,
+  Activity, BookOpen, Boxes, FlaskConical, GaugeCircle, History, LayoutDashboard, LogOut, MonitorPlay,
   Moon, Network, Search, ShieldAlert, ShieldCheck, SlidersHorizontal, Sun, Swords, Waypoints,
 } from "lucide-react";
 import { api } from "@/lib/api";
@@ -23,6 +23,7 @@ export const NAV = [
     { to: "/experiments", label: "Experiments", icon: FlaskConical, key: "g e" },
     { to: "/research", label: "Research results", icon: GaugeCircle, key: "g r" },
     { to: "/replay", label: "Replay", icon: History, key: "g p" },
+    { to: "/ns3", label: "NS-3 & NetAnim", icon: MonitorPlay, key: "g 3" },
   ] },
   { group: "Configure", items: [
     { to: "/attack-builder", label: "Attack builder", icon: Swords, key: "g b" },

@@ -33,7 +33,8 @@ NS3_VERSION = "3.48"
 DISTRO = os.environ.get("NETSHIELD_WSL_DISTRO", "Ubuntu-24.04")
 NS3_DIR = os.environ.get("NETSHIELD_NS3_DIR", "/opt/ns-3.48")
 NS3_USER = os.environ.get("NETSHIELD_NS3_USER", "ns")
-MODULES = "core;network;internet;point-to-point;applications;traffic-control"
+MODULES = "core;network;internet;point-to-point;applications;traffic-control;mobility;netanim"
+NETANIM_DIR = os.environ.get("NETSHIELD_NETANIM_DIR", "/home/ns/netanim")
 REPO = Path(__file__).resolve().parents[1]
 MODEL_DIR = REPO / "ns3" / "netshield"
 WIN = os.name == "nt"
@@ -70,7 +71,9 @@ def _wsl(script: str, timeout: float = 3600, user: str = NS3_USER, check: bool =
 # --------------------------------------------------------------------------- #
 INSTALL_DEPS = ("export DEBIAN_FRONTEND=noninteractive; "
                 "apt-get update -q && apt-get install -y -q "
-                "g++ cmake ninja-build python3 python3-dev tar wget bzip2 ca-certificates")
+                "g++ cmake ninja-build python3 python3-dev tar wget bzip2 ca-certificates "
+                # for building the NetAnim GUI from source:
+                "git qtbase5-dev qt5-qmake qtbase5-dev-tools libqt5core5a libxml2-dev make")
 
 def _build_script(model_src: str) -> str:
     return (
@@ -85,10 +88,19 @@ def _build_script(model_src: str) -> str:
         f"cp {model_src}/netshield-sim.cc {model_src}/netshield-trace.h {NS3_DIR}/scratch/netshield/; "
         f"cd {NS3_DIR}; "
         f"./ns3 configure --build-profile=optimized --enable-modules='{MODULES}' "
-        f"  --disable-examples --disable-tests --disable-python-bindings >/tmp/ns3cfg.log 2>&1; "
+        f"  --disable-examples --disable-tests --disable-python-bindings "
+        f"  -- -DCMAKE_CXX_FLAGS=-DNETSHIELD_ANIM >/tmp/ns3cfg.log 2>&1; "
         f"./ns3 build netshield-sim >/tmp/ns3build.log 2>&1; "
         f"test -x {NS3_DIR}/build/scratch/netshield/ns3.{NS3_VERSION}-netshield-sim-optimized "
-        f"  && echo BUILD_OK")
+        f"  || {{ echo NS3_BUILD_FAILED; tail -5 /tmp/ns3build.log; exit 1; }}; "
+        # NetAnim GUI (built once, from source, with Qt5).
+        f"if [ ! -x {NETANIM_DIR}/build/netanim ]; then "
+        f"  git clone -q https://gitlab.com/nsnam/netanim.git {NETANIM_DIR} 2>/dev/null || true; "
+        f"  mkdir -p {NETANIM_DIR}/build && cd {NETANIM_DIR}/build && "
+        f"  cmake .. -DCMAKE_BUILD_TYPE=Release >/tmp/na_cmake.log 2>&1 && "
+        f"  make -j$(nproc) >/tmp/na_make.log 2>&1 || echo NETANIM_BUILD_FAILED; "
+        f"fi; "
+        f"echo BUILD_OK")
 
 
 def _model_src_wsl() -> str:

@@ -800,6 +800,9 @@ def create_app(config: Config | None = None) -> FastAPI:
     from .insight_routes import register_insights  # noqa: PLC0415
 
     register_insights(app, cfg, session)
+    from .ns3_routes import register_ns3  # noqa: PLC0415
+
+    register_ns3(app, cfg, experiments_doc)
     return app
 
 

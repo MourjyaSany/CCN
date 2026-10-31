@@ -81,13 +81,17 @@ def device_app_rate(device_class: str, traffic: Mapping[str, Any]) -> tuple[str,
     return kind, port, max(1.0, rate_bps), pkt
 
 
-def write_spec(config: Config, output_dir: str | Path, spec_path: str | Path) -> dict[str, Any]:
+def write_spec(config: Config, output_dir: str | Path, spec_path: str | Path,
+               anim_file: str | None = None) -> dict[str, Any]:
     """Write the NS-3 scenario spec and return a provenance dictionary.
 
     Args:
         config: The merged configuration.
         output_dir: Directory the C++ model writes its CSV/JSON output to.
         spec_path: Where to write the spec file.
+        anim_file: When set, the NS-3 model also writes a NetAnim trace there
+            (a path in the engine's own filesystem) so the run can be watched
+            in the NS-3 animator. Only sensible for short/small scenarios.
 
     Returns:
         Provenance: node/link counts, the family mapping used and every
@@ -112,6 +116,8 @@ def write_spec(config: Config, output_dir: str | Path, spec_path: str | Path) ->
     p("seed", seed)
     p("topology", config.get("network.topology.family", "tree"))
     p("output_dir", str(output_dir).replace("\\", "/"))
+    if anim_file:
+        p("anim_file", str(anim_file).replace("\\", "/"))
 
     # ---- nodes ------------------------------------------------------------
     for nid in ids:
