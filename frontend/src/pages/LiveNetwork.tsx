@@ -25,7 +25,8 @@ export function LiveNetwork() {
   const hot = nodes.filter((n) => n.probability >= 0.8).length;
   return (
     <>
-      <PageHeader title="Live network" subtitle="Click any node for its score history, the reason it was flagged, and the rules applied to it." />
+      <PageHeader title="Live network" subtitle="Click any node for its score history, the reason it was flagged, and the rules applied to it."
+        note="The graph the GNN actually reasons over. Each node is a simulated device coloured by its current P(hostile); edges are real links. This is where you see the detector's view of the network update window by window as the attack unfolds." />
       <div className="grid gap-5 xl:grid-cols-[1fr_420px]">
         <Card>
           <CardHeader title={topo.data?.name || "Topology"} subtitle={`${nodes.length} nodes · ${hot} above trigger · ${ruled} under a rule`}

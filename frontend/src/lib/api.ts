@@ -72,8 +72,33 @@ export const api = {
   topologies: () => request<any[]>("/api/topologies"),
   // --- NS-3 engine + NetAnim ---
   ns3Status: () => request<{ available: boolean; version?: string; distro?: string; netanim_available?: boolean; wsl_cores?: string; wsl_kernel?: string; reason?: string }>("/api/ns3/status"),
-  ns3Animate: (body: { scenario: string; duration_s?: number; overrides?: Record<string, unknown> }) =>
-    post<{ run_id: string; engine: string; topology: string; n_nodes: number; n_links: number; packets_generated: number; loss_ratio: number; anim_available: boolean; approximations: string[] }>("/api/ns3/animate", body),
+  ns3AnimateStart: (body: { scenario: string; duration_s?: number; overrides?: Record<string, unknown>; mitigate?: boolean }) =>
+    post<{ job_id: string }>("/api/ns3/animate/start", body),
+  ns3AnimateJob: (jobId: string) =>
+    request<{
+      job_id: string;
+      status: "queued" | "running" | "completed" | "failed";
+      progress: {
+        sim_time_s: number;
+        duration_s: number;
+        gateway_blocked_packets: number;
+        gateway_blocked_attack_packets: number;
+        gateway_blocked_legit_packets: number;
+        gateway_blocked_pps: number;
+      };
+      result: {
+        run_id: string; engine: string; topology: string; n_nodes: number; n_links: number;
+        packets_generated: number; loss_ratio: number; clean_delivered_ratio: number | null;
+        attack_reached_cloud: number | null; attack_offered_total: number | null;
+        attack_blocked_pct: number | null; attack_reached_pct: number | null;
+        gateway_blocked_packets: number; gateway_blocked_attack_packets: number;
+        gateway_blocked_legit_packets: number; anim_available: boolean; mitigated: boolean;
+        approximations: string[];
+      } | null;
+      error: string | null;
+    }>(`/api/ns3/animate/jobs/${encodeURIComponent(jobId)}`),
+  ns3Animate: (body: { scenario: string; duration_s?: number; overrides?: Record<string, unknown>; mitigate?: boolean }) =>
+    post<{ run_id: string; engine: string; topology: string; n_nodes: number; n_links: number; packets_generated: number; loss_ratio: number; clean_delivered_ratio: number | null; attack_reached_cloud: number | null; attack_offered_total: number | null; attack_blocked_pct: number | null; attack_reached_pct: number | null; gateway_blocked_packets: number; gateway_blocked_attack_packets: number; gateway_blocked_legit_packets: number; anim_available: boolean; mitigated: boolean; approximations: string[] }>("/api/ns3/animate", body),
   netanimOpen: (run_id: string) => post<{ opened: boolean; run_id: string; pid: number | null }>("/api/ns3/netanim/open", { run_id }),
-  ns3Runs: () => request<Array<{ run_id: string; experiment: string; topology: string; engine: string; packets: number; generated_at: string }>>("/api/ns3/runs"),
+  ns3Runs: () => request<Array<{ run_id: string; experiment: string; topology: string; engine: string; packets: number; mitigated: boolean; attack_blocked_pct: number | null; generated_at: string }>>("/api/ns3/runs"),
 };

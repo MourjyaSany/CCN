@@ -14,7 +14,8 @@ export function Incidents() {
   const start = events.find((e) => e.kind === "attack_start")?.t;
   return (
     <>
-      <PageHeader title="Incident timeline" subtitle="Every panel shares one time axis. Scroll or pinch on a chart to zoom all of them together." />
+      <PageHeader title="Incident timeline" subtitle="Every panel shares one time axis. Scroll or pinch on a chart to zoom all of them together."
+        note="The whole incident on one clock: when the attack started, when the detector first flagged it, when the gateway acted, and how availability and latency moved in response. The gaps between those markers are the numbers this project is really about." />
       <div className="grid gap-5 xl:grid-cols-[1fr_320px]">
         <Card>
           <CardHeader title={t.data?.scenario || "Current run"} subtitle={t.data?.run_id} />

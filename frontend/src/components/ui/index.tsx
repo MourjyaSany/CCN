@@ -5,22 +5,23 @@ import * as TabsPrimitive from "@radix-ui/react-tabs";
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
-import { X } from "lucide-react";
+import { Info, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /* ------------------------------------------------------------------ Button */
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0",
+  "group/btn relative inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-[background,box-shadow,transform,color] duration-150 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        primary: "bg-accent text-white hover:bg-accent/90 shadow-sm",
-        secondary: "bg-raised text-fg border border-border hover:bg-border/40",
-        ghost: "text-muted hover:text-fg hover:bg-border/40",
-        danger: "bg-bad text-white hover:bg-bad/90",
+        primary: "bg-accent text-white shadow-sm hover:bg-accent/90 hover:shadow-[0_0_18px_-4px_rgb(var(--accent)/0.65)]",
+        secondary: "border border-border bg-raised text-fg hover:border-accent/40 hover:bg-border/40",
+        ghost: "text-muted hover:bg-border/40 hover:text-fg",
+        danger: "bg-bad text-white hover:bg-bad/90 hover:shadow-[0_0_18px_-4px_rgb(var(--bad)/0.6)]",
         good: "bg-good text-white hover:bg-good/90",
+        cyan: "bg-cyan text-white hover:bg-cyan/90 hover:shadow-[0_0_18px_-4px_rgb(var(--cyan)/0.7)]",
       },
-      size: { sm: "h-8 px-3", md: "h-9 px-4", icon: "h-9 w-9", xs: "h-7 px-2 text-xs" },
+      size: { sm: "h-8 px-3", md: "h-9 px-4", icon: "h-9 w-9", xs: "h-7 px-2 text-xs", lg: "h-11 px-5 text-[15px]" },
     },
     defaultVariants: { variant: "secondary", size: "md" },
   },
@@ -265,12 +266,30 @@ export const DataTable = ({ className, ...p }: React.TableHTMLAttributes<HTMLTab
 );
 
 /* ---------------------------------------------------------- Page header */
-export const PageHeader = ({ title, subtitle, actions }: { title: string; subtitle?: React.ReactNode; actions?: React.ReactNode }) => (
-  <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-    <div>
-      <h1 className="text-xl font-semibold tracking-tight text-fg">{title}</h1>
-      {subtitle && <p className="mt-1 text-sm text-muted">{subtitle}</p>}
+export const PageHeader = ({ title, subtitle, actions, note }: {
+  title: string; subtitle?: React.ReactNode; actions?: React.ReactNode; note?: React.ReactNode;
+}) => (
+  <div className="mb-5">
+    <div className="flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h1 className="text-xl font-semibold tracking-tight text-fg">{title}</h1>
+        {subtitle && <p className="mt-1 text-sm text-muted">{subtitle}</p>}
+      </div>
+      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
-    {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+    {note && <SectionNote className="mt-3">{note}</SectionNote>}
   </div>
+);
+
+/* ------------------------------------------------- Section explainer line
+ * The short "what is this and why" line that sits under a page or section
+ * header. Left cyan rule keeps it visually distinct from ordinary copy. */
+export const SectionNote = ({ children, className }: { children: React.ReactNode; className?: string }) => (
+  <p className={cn(
+    "flex items-start gap-2 rounded-r-md border-l-2 border-cyan/60 bg-cyan/[0.06] py-1.5 pl-3 pr-3 text-[13px] leading-relaxed text-muted",
+    className,
+  )}>
+    <Info className="mt-0.5 size-3.5 shrink-0 text-cyan" />
+    <span>{children}</span>
+  </p>
 );

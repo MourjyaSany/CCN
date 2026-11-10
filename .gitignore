@@ -67,3 +67,6 @@ results/research/adversary/*.json
 # Research figures and the generated research report are part of the deliverable.
 !results/figures/research_*.png
 !results/reports/RESEARCH_RESULTS.md
+
+# --- Office lock / temp files ---
+~$*

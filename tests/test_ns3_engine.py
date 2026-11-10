@@ -113,3 +113,58 @@ class TestNs3Run:
         # When the probe says available this is a no-op guard; the real value is
         # documenting the contract. Covered by the skip when unavailable.
         assert _PROBE.available
+
+    def test_animated_run_streams_categorized_gateway_drops(
+        self, base_config: Any, tmp_path: Any,
+    ) -> None:
+        from netshield.simulation.ns3_run import run_and_save_animated
+
+        config = base_config.with_set([
+            "simulation.engine=ns3",
+            "simulation.duration_s=8",
+            "simulation.n_iot_devices=4",
+            "simulation.n_attackers=2",
+            "attack.enabled=true",
+            "attack.type=udp_flood",
+            "attack.packets_per_second=500",
+            "attack.start_s=2",
+            "attack.duration_s=5",
+            "mitigation.ns3_eval_s=0.5",
+            "mitigation.ns3_ratelimit_after=1",
+        ])
+        progress: list[dict[str, Any]] = []
+        result = run_and_save_animated(
+            config,
+            {"experiment": "live-gateway-counter-test"},
+            tmp_path,
+            mitigate=True,
+            progress_callback=progress.append,
+        )
+
+        assert progress
+        first_drop = next(
+            (sample for sample in progress if sample["gateway_blocked_packets"] > 0),
+            None,
+        )
+        assert first_drop is not None
+        assert 2.5 <= first_drop["sim_time_s"] <= 3.25
+        assert all(
+            sample["gateway_blocked_packets"] == 0
+            for sample in progress
+            if sample["sim_time_s"] < 2.5
+        )
+        summary = result.summary
+        assert summary["gateway_blocked_packets"] > 0
+        assert summary["gateway_blocked_packets"] == (
+            summary["gateway_blocked_attack_packets"]
+            + summary["gateway_blocked_legit_packets"]
+        )
+        final = progress[-1]
+        assert final["sim_time_s"] == 8
+        assert final["gateway_blocked_packets"] == summary["gateway_blocked_packets"]
+        assert final["gateway_blocked_attack_packets"] == (
+            summary["gateway_blocked_attack_packets"]
+        )
+        assert final["gateway_blocked_legit_packets"] == (
+            summary["gateway_blocked_legit_packets"]
+        )

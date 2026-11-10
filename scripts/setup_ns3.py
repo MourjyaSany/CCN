@@ -86,6 +86,7 @@ def _build_script(model_src: str) -> str:
         f"fi; "
         f"mkdir -p {NS3_DIR}/scratch/netshield; "
         f"cp {model_src}/netshield-sim.cc {model_src}/netshield-trace.h {NS3_DIR}/scratch/netshield/; "
+        f"cp {model_src}/patch_netanim.py /tmp/patch_netanim.py; "
         f"cd {NS3_DIR}; "
         f"./ns3 configure --build-profile=optimized --enable-modules='{MODULES}' "
         f"  --disable-examples --disable-tests --disable-python-bindings "
@@ -96,6 +97,8 @@ def _build_script(model_src: str) -> str:
         # NetAnim GUI (built once, from source, with Qt5).
         f"if [ ! -x {NETANIM_DIR}/build/netanim ]; then "
         f"  git clone -q https://gitlab.com/nsnam/netanim.git {NETANIM_DIR} 2>/dev/null || true; "
+        # Teach NetAnim to auto-load the trace passed on its command line.
+        f"  python3 /tmp/patch_netanim.py {NETANIM_DIR}/src || echo NETANIM_PATCH_FAILED; "
         f"  mkdir -p {NETANIM_DIR}/build && cd {NETANIM_DIR}/build && "
         f"  cmake .. -DCMAKE_BUILD_TYPE=Release >/tmp/na_cmake.log 2>&1 && "
         f"  make -j$(nproc) >/tmp/na_make.log 2>&1 || echo NETANIM_BUILD_FAILED; "

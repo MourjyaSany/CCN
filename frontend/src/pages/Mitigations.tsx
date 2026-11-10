@@ -23,6 +23,7 @@ export function Mitigations() {
   return (
     <>
       <PageHeader title="Mitigations" subtitle="Rules at the gateway ingress, keyed on the physical port, so spoofed source addresses cannot dodge them."
+        note="The defence acting on the detector's verdict. Each rule — rate-limit, block or isolate — is enforced in-band on the live packet path, so dropped traffic and recovering throughput are measured outcomes. Keyed on the ingress port, not the source IP, so address spoofing can't slip past."
         actions={<Badge tone="accent">approval mode: {policy.data?.approval_mode ?? "–"}</Badge>} />
       <div className="grid gap-5 xl:grid-cols-2">
         <Card>

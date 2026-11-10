@@ -48,6 +48,7 @@ export function Replay() {
   return (
     <>
       <PageHeader title="Replay" subtitle="Scrub through any saved run window by window: what the detector saw, and what it did."
+        note="Every run is recorded, so you can step back through one frame by frame — the scores, the alerts, the rules — to understand exactly why the defence made each call. The forensic counterpart to the live Overview."
         actions={<Switch checked={closedOnly} onCheckedChange={setClosedOnly} label="Closed-loop runs only" />} />
       <Card className="mb-5">
         <CardBody className="flex flex-wrap items-center gap-3">

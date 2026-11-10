@@ -14,8 +14,9 @@ from __future__ import annotations
 import csv
 import json
 import tempfile
+from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 from ..traffic.attacks import AttackProfile
 from ..utils.config import Config
@@ -128,7 +129,9 @@ def execute(
     run_id: str,
     result_class: Any,
     closed_loop: bool = False,
-    anim_path: "Path | None" = None,
+    anim_path: Path | None = None,
+    mitigate: bool = False,
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> Any:
     """Run the scenario in NS-3 and return a populated result.
 
@@ -144,9 +147,12 @@ def execute(
             model runs open-loop, so this is recorded as an approximation.
         anim_path: When set, a NetAnim trace of the run is written to this
             path so it can be opened in the NS-3 animator.
+        mitigate: Whether the gateway policer is enabled inside the model.
+        progress_callback: Receives live gateway-drop counter updates.
 
     Returns:
         A result bundle stamped with :data:`ENGINE_NS3`.
+
     """
     from .topology import build_topology  # noqa: PLC0415
 
@@ -162,8 +168,9 @@ def execute(
         # output directory; Python then reads the same files from the Windows
         # path. On a native Linux host the two paths coincide.
         anim_wsl = win_to_wsl(out_dir / "netanim.xml") if anim_path else None
-        prov = write_spec(config, win_to_wsl(out_dir), spec_path, anim_file=anim_wsl)
-        proc = run_model(spec_path)
+        prov = write_spec(config, win_to_wsl(out_dir), spec_path, anim_file=anim_wsl,
+                          mitigate=mitigate)
+        proc = run_model(spec_path, progress_callback=progress_callback)
         flows = _read_csv(out_dir / "ns3_flows.csv")
         windows = _window_rows(_read_csv(out_dir / "ns3_windows.csv"), window_s)
         ns3_meta = {}
@@ -177,7 +184,12 @@ def execute(
             anim_saved = str(anim_path)
 
     approximations = list(prov.get("ns3_approximations", []))
-    if closed_loop:
+    if mitigate:
+        approximations.append(
+            "mitigation is enforced in NS-3 by a reactive rate-based policer at "
+            "the gateway (watch -> rate-limit -> block -> release); the flood is "
+            "throttled and cut off inside the run")
+    elif closed_loop:
         approximations.append(
             "closed-loop mitigation is not enforced inside the NS-3 model; this "
             "run is open-loop and reports no mitigations")
@@ -186,7 +198,25 @@ def execute(
 
     profile = AttackProfile.from_config(config)
     offered = int(ns3_meta.get("packets_offered", 0))
+    delivered_total = int(ns3_meta.get("packets_delivered", 0))
     dropped = int(ns3_meta.get("packets_dropped", 0))
+    # ---- victim-side effectiveness metrics -------------------------------
+    # Counted exactly by the model: every cloud-bound packet is classified once
+    # at its origin (attack or legitimate) and counted again only if it is
+    # actually delivered at the cloud. Both ratios are therefore true fractions
+    # in [0, 1]. (The earlier approach inferred attack delivery by subtracting
+    # legitimate from *total* delivery, which also contains TCP ACKs and other
+    # return traffic, and could produce nonsensical negative percentages.)
+    atk_off = int(ns3_meta.get("atk_offered_cloud", 0) or 0)
+    atk_del = int(ns3_meta.get("atk_delivered_cloud", 0) or 0)
+    leg_off = int(ns3_meta.get("legit_offered_cloud", 0) or 0)
+    leg_del = int(ns3_meta.get("legit_delivered_cloud", 0) or 0)
+    attack_reached = atk_del
+    attack_offered = atk_off
+    #: Mitigation rate: share of the attack kept out of the victim.
+    attack_blocked_pct = round(1.0 - atk_del / atk_off, 6) if atk_off else 0.0
+    #: Goodput preservation: share of legitimate traffic that still arrives.
+    legit_delivered_ratio = round(leg_del / leg_off, 6) if leg_off else 0.0
     topo_desc = topo.describe()
     topo_desc["source"] = "ns3"
     summary = {
@@ -203,11 +233,27 @@ def execute(
         "packets_generated": offered,
         "packets_delivered": int(ns3_meta.get("packets_delivered", 0)),
         "packets_dropped": dropped,
-        "overall_loss_ratio": round(dropped / offered, 6) if offered else 0.0,
+        "gateway_blocked_packets": int(ns3_meta.get("gateway_blocked_packets", 0) or 0),
+        "gateway_blocked_attack_packets": int(
+            ns3_meta.get("gateway_blocked_attack_packets", 0) or 0),
+        "gateway_blocked_legit_packets": int(
+            ns3_meta.get("gateway_blocked_legit_packets", 0) or 0),
+        "overall_loss_ratio": (
+            round(max(0.0, 1.0 - delivered_total / offered), 6) if offered else 0.0
+        ),
+        "clean_loss_ratio": round(1.0 - legit_delivered_ratio, 6),
+        "clean_delivered_ratio": legit_delivered_ratio,
+        "legit_offered_cloud": leg_off,
+        "legit_delivered_cloud": leg_del,
+        "attack_reached_cloud": attack_reached,
+        "attack_offered_total": attack_offered,
+        "attack_blocked_pct": attack_blocked_pct,
+        "attack_reached_pct": round(atk_del / atk_off, 6) if atk_off else 0.0,
         "attack": profile.to_dict(),
         "attack_families": {profile.attack_type: len(topo.attackers())} if profile.enabled
         else {},
         "ns3_approximations": approximations,
+        "ns3_mitigated": bool(mitigate),
         "ns3_spec": {k: v for k, v in prov.items() if k != "node_index"},
         "ns3_anim_file": anim_saved,
         "wall_seconds": proc.get("wall_s"),
@@ -231,7 +277,13 @@ def execute(
     )
 
 
-def run_and_save_animated(config: Config, meta: Mapping[str, Any], save_root: Path) -> Any:
+def run_and_save_animated(
+    config: Config,
+    meta: Mapping[str, Any],
+    save_root: Path,
+    mitigate: bool = False,
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
+) -> Any:
     """Run a scenario in NS-3 with a NetAnim trace and save everything.
 
     This is the entry point the API uses for "run in NS-3 and visualise". It
@@ -243,15 +295,18 @@ def run_and_save_animated(config: Config, meta: Mapping[str, Any], save_root: Pa
         config: The scenario configuration (NS-3 is forced).
         meta: Experiment metadata.
         save_root: The ``data/experiments`` directory.
+        mitigate: Whether the gateway policer is enabled inside the model.
+        progress_callback: Receives live gateway-drop counter updates.
 
     Returns:
         The saved result; ``result.summary['ns3_anim_file']`` is the trace path.
 
     Raises:
         NS3Unavailable: If NS-3 is not runnable.
+
     """
-    from .runner import SimulationResult, build_run_id  # noqa: PLC0415
     from .ns3_wsl import NS3Unavailable, detect  # noqa: PLC0415
+    from .runner import SimulationResult, build_run_id  # noqa: PLC0415
 
     probe = detect()
     if not probe.available:
@@ -262,7 +317,8 @@ def run_and_save_animated(config: Config, meta: Mapping[str, Any], save_root: Pa
         config=config, meta=meta, probe=probe,
         engine_reason=f"NS-3 {probe.version} in WSL ({probe.distro})",
         run_id=run_id, result_class=SimulationResult, closed_loop=False,
-        anim_path=run_dir / "netanim.xml",
+        anim_path=run_dir / "netanim.xml", mitigate=mitigate,
+        progress_callback=progress_callback,
     )
     result.save(run_dir)
     return result

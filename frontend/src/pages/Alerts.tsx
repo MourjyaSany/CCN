@@ -52,6 +52,7 @@ export function Alerts() {
   return (
     <>
       <PageHeader title="Alerts" subtitle="Every node-window above the trigger, mapped to MITRE ATT&CK on export."
+        note="The detector's raw findings: every window in which a node's hostility probability crossed the trigger. This is the evidence trail behind each mitigation — exportable as STIX or CEF so it can feed a real SIEM."
         actions={<>
           <Button size="sm" onClick={() => exportAs("stix")}><Download /> STIX 2.1</Button>
           <Button size="sm" onClick={() => exportAs("cef")}><Download /> CEF</Button>

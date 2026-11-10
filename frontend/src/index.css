@@ -2,36 +2,58 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Design tokens. Space-separated RGB so Tailwind can apply alpha. */
+/* ------------------------------------------------------------------ tokens
+ * Two palettes live here. "Content" tokens (bg/surface/fg/...) flip with the
+ * light/dark theme and drive the readable data panels. "Chrome" tokens are
+ * fixed ink - the sidebar, topbar and home sit in a permanent command-center
+ * dark regardless of the content theme. That split is the house style:
+ * an ops console wrapped around an editorial reading surface.
+ * Colours are space-separated RGB so Tailwind can apply alpha.
+ */
 :root {
-  --bg: 246 247 249;
+  /* content - light */
+  --bg: 246 248 251;
   --surface: 255 255 255;
-  --raised: 250 250 251;
-  --border: 228 230 235;
-  --fg: 17 20 26;
-  --muted: 88 96 110;
-  --subtle: 140 147 160;
-  --accent: 37 99 235;
-  --good: 22 163 106;
-  --warn: 217 140 0;
-  --bad: 220 53 69;
-  --info: 2 132 199;
+  --raised: 247 249 252;
+  --border: 224 229 236;
+  --fg: 15 23 38;
+  --muted: 80 91 109;
+  --subtle: 138 148 164;
+  --accent: 29 108 236;
+  --cyan: 10 148 168;
+  --good: 17 157 97;
+  --warn: 199 128 6;
+  --bad: 213 48 66;
+  --info: 4 125 191;
+
+  /* chrome - fixed ink (does not flip with theme) */
+  --chrome-bg: 10 13 20;
+  --chrome-surface: 14 18 27;
+  --chrome-raised: 20 26 37;
+  --chrome-fg: 228 234 244;
+  --chrome-muted: 138 149 169;
+  --chrome-subtle: 96 106 125;
+  --chrome-border: 32 40 54;
+  --chrome-accent: 46 200 224;
+
   color-scheme: light;
 }
 
 .dark {
-  --bg: 11 13 17;
-  --surface: 18 21 27;
-  --raised: 24 28 35;
-  --border: 39 44 54;
-  --fg: 232 235 240;
-  --muted: 160 167 180;
-  --subtle: 110 117 130;
-  --accent: 96 145 255;
-  --good: 52 199 133;
-  --warn: 240 170 40;
-  --bad: 255 99 112;
-  --info: 56 189 248;
+  /* content - dark */
+  --bg: 12 15 21;
+  --surface: 18 22 30;
+  --raised: 24 29 39;
+  --border: 37 44 57;
+  --fg: 228 233 241;
+  --muted: 153 162 179;
+  --subtle: 106 115 132;
+  --accent: 94 152 255;
+  --cyan: 46 200 224;
+  --good: 48 198 128;
+  --warn: 236 170 44;
+  --bad: 250 96 110;
+  --info: 52 186 246;
   color-scheme: dark;
 }
 
@@ -49,5 +71,43 @@
   .num { font-variant-numeric: tabular-nums; }
   .scroll-thin::-webkit-scrollbar { width: 8px; height: 8px; }
   .scroll-thin::-webkit-scrollbar-thumb { background: rgb(var(--border)); border-radius: 8px; }
-  .label { @apply text-[11px] font-semibold uppercase tracking-wider text-subtle; }
+  .scroll-thin::-webkit-scrollbar-track { background: transparent; }
+  .label { @apply text-[11px] font-semibold uppercase tracking-[0.08em] text-subtle; }
+  .mono { @apply font-mono; font-variant-ligatures: none; }
+
+  /* Faint engineering dot-grid, used behind the chrome and the home hero. */
+  .grid-dots {
+    background-image: radial-gradient(rgb(255 255 255 / 0.05) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+  .grid-dots-ink {
+    background-image: radial-gradient(rgb(var(--cyan) / 0.10) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* An interactive "chip" button used across the ops chrome. */
+  .press { @apply transition-transform duration-100 active:scale-[0.97]; }
 }
+
+/* ------------------------------------------------------------------ effects */
+.glow-cyan { box-shadow: 0 0 0 1px rgb(var(--chrome-accent) / 0.35), 0 0 20px -2px rgb(var(--chrome-accent) / 0.45); }
+.glow-accent { box-shadow: 0 0 18px -4px rgb(var(--accent) / 0.55); }
+.text-glow { text-shadow: 0 0 16px rgb(var(--chrome-accent) / 0.55); }
+
+/* Energy flowing along a pipeline edge (SVG stroke-dashoffset march). */
+@keyframes flowDash { to { stroke-dashoffset: -24; } }
+.flow-dash { stroke-dasharray: 3 7; animation: flowDash 0.9s linear infinite; }
+
+/* Slow node breathing for the pipeline mindmap. */
+@keyframes breathe {
+  0%, 100% { opacity: 0.85; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.03); }
+}
+.breathe { animation: breathe 3.2s ease-in-out infinite; }
+
+/* Soft float for decorative packets. */
+@keyframes floaty { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+.floaty { animation: floaty 4s ease-in-out infinite; }
+
+/* Travelling glow ring on the active nav item. */
+@keyframes sheen { 0% { background-position: -140% 0; } 100% { background-position: 240% 0; } }

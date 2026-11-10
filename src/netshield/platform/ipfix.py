@@ -158,8 +158,7 @@ class Decoder:
         size = sum(length for _, length, _ in template)
         rows = []
         for start in range(0, len(body) - size + 1, size):
-            pos = start
-            row: dict[str, Any] = {}
+            pos, row = start, {}
             for ie, length, pen in template:
                 raw = body[pos:pos + length]
                 pos += length

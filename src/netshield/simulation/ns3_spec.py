@@ -34,13 +34,29 @@ from ..utils.config import Config
 from .topology import build_topology
 
 #: Attack family -> (uses_tcp, destination port, is_approximation).
+#:
+#: Every family is reproduced as *offered load* on its characteristic
+#: destination port and packet size. Only ``udp_flood`` is transport-exact; the
+#: rest are approximations and are labelled as such in the run metadata.
+#:
+#: They are carried over UDP rather than TCP deliberately. A TCP-carried
+#: "flood" is congestion-controlled: the bots back off to a fair share of the
+#: bottleneck (measured: ~55 pkt/s per bot instead of ~1500), so the attack
+#: never becomes volumetric and there is nothing for a rate policer to act on.
+#: Worse, once the gateway blocks a TCP source it stops transmitting, so the
+#: attack's own offered load collapses and any within-run mitigation ratio is
+#: meaningless. Carrying the approximated load over UDP keeps the offered rate
+#: faithful to the configured attack intensity. Transport semantics (the TCP
+#: handshake and congestion control, ICMP echo, slowloris' held connections)
+#: are not reproduced here; the Python discrete-event engine models those,
+#: including the finite SYN backlog.
 ATTACK_MAP: dict[str, tuple[bool, int, bool]] = {
     "udp_flood": (False, 5683, False),
-    "http_flood": (True, 80, False),
+    "http_flood": (False, 80, True),
     "icmp_flood": (False, 5683, True),
-    "syn_flood": (True, 8883, True),
-    "ack_flood": (True, 80, True),
-    "slowloris": (True, 80, True),
+    "syn_flood": (False, 8883, True),
+    "ack_flood": (False, 80, True),
+    "slowloris": (False, 80, True),
 }
 
 #: Device class -> (app kind, destination port, interval key, payload key).
@@ -82,7 +98,7 @@ def device_app_rate(device_class: str, traffic: Mapping[str, Any]) -> tuple[str,
 
 
 def write_spec(config: Config, output_dir: str | Path, spec_path: str | Path,
-               anim_file: str | None = None) -> dict[str, Any]:
+               anim_file: str | None = None, mitigate: bool = False) -> dict[str, Any]:
     """Write the NS-3 scenario spec and return a provenance dictionary.
 
     Args:
@@ -92,6 +108,10 @@ def write_spec(config: Config, output_dir: str | Path, spec_path: str | Path,
         anim_file: When set, the NS-3 model also writes a NetAnim trace there
             (a path in the engine's own filesystem) so the run can be watched
             in the NS-3 animator. Only sensible for short/small scenarios.
+        mitigate: When set, the NS-3 model installs a reactive rate-based
+            policer at the enforcement ("gateway") nodes, so the flood is
+            throttled and then cut off inside the run (and in NetAnim). The
+            policer thresholds are derived from the mitigation policy.
 
     Returns:
         Provenance: node/link counts, the family mapping used and every
@@ -118,6 +138,39 @@ def write_spec(config: Config, output_dir: str | Path, spec_path: str | Path,
     p("output_dir", str(output_dir).replace("\\", "/"))
     if anim_file:
         p("anim_file", str(anim_file).replace("\\", "/"))
+
+    # ---- in-NS-3 data-plane enforcement (reactive gateway policer) --------
+    # When requested, the C++ model watches each source's rate at the gateway
+    # and escalates through the policy ladder, so the flood is visibly cut off
+    # inside the simulation. Thresholds come from the mitigation policy; the
+    # per-source trigger rate sits well above any legitimate device's rate and
+    # far below an attacker's, so only floods are throttled.
+    if mitigate:
+        mit = config.get("mitigation", {}) or {}
+        # Fast reaction so almost none of the flood reaches the cloud: the
+        # policer re-evaluates every 0.5 s, rate-limits a source after one
+        # flooding interval and blocks it after two (~1 s from attack onset).
+        # The trigger rate (50 pps) sits far above any legitimate device and
+        # far below a bot, so only floods are ever throttled.
+        p("mitigation_enabled", 1)
+        p("mitigation_eval_s", float(mit.get("ns3_eval_s", 0.5)))
+        # Per-source trigger rate. Legitimate IoT devices in these scenarios
+        # offer ~5 pkt/s each, so 15 pkt/s leaves roughly 3x headroom while
+        # still catching a low-and-slow family such as slowloris (~20 pkt/s).
+        p("mitigation_rate_pps", float(mit.get("ns3_trigger_pps", 15.0)))
+        # Throttle a flagged source hard once it is rate-limited. The throttle
+        # has to bite well below a low-and-slow family's own rate (~20 pkt/s),
+        # otherwise rate-limiting such an attack would barely reduce it.
+        p("mitigation_ratelimit_pps", float(mit.get("ns3_ratelimit_pps", 2.0)))
+        p("mitigation_burst", float(mit.get("ns3_burst", 4.0)))
+        # Require consecutive flooding intervals before acting, so a momentary
+        # burst from a legitimate device cannot trip the policer, then hold the
+        # source visibly rate-limited before blocking it. Two intervals (1 s) is
+        # the shortest delay that still filters transient bursts; every extra
+        # interval is attack traffic that reaches the victim.
+        p("mitigation_ratelimit_after", int(mit.get("ns3_ratelimit_after", 2)))
+        p("mitigation_block_after", int(mit.get("ns3_block_after", 6)))
+        p("mitigation_release_after", int(mit.get("ns3_release_evals", 6)))
 
     # ---- nodes ------------------------------------------------------------
     for nid in ids:

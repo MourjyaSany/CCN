@@ -423,6 +423,19 @@ class SimulationEngine:
                     index,
                 )
                 raise
+        # Record how many sources are under an active rule as of this window's
+        # close. The enforcer (installed as the packet filter) is the source of
+        # truth; controllers have just run, so its state is current. Without
+        # this the per-window ``mitigated_sources`` counter stays 0 and the
+        # "Rules active" dashboard reads empty even while rules are enforcing.
+        pf = self.packet_filter
+        if pf is not None and hasattr(pf, "active_sources"):
+            win = self.telemetry.windows.get(index)
+            if win is not None:
+                try:
+                    win.mitigated_sources = len(pf.active_sources())
+                except Exception:  # pragma: no cover - never fail a run over a counter
+                    pass
         nxt = t + self.telemetry.window_s
         if nxt <= self.duration_s + 1e-9:
             self.schedule_at(nxt, self._window_boundary, index + 1)

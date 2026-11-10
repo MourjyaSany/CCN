@@ -82,6 +82,7 @@ export function Research() {
     <>
       <PageHeader title="Research results"
         subtitle="Leave-one-seed-out cross-validation over every topology and attack family, with 95% run-level bootstrap intervals."
+        note="Where the project earns its claims. Instead of a single demo run, detectors are scored across many seeds, topologies and attack families with proper confidence intervals — so a difference between two models is statistically defensible, not cherry-picked."
         actions={q.data?.report_available && <Badge tone="good">full report: results/reports/RESEARCH_RESULTS.md</Badge>} />
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>

@@ -84,10 +84,6 @@ OnSendOutgoing(const Ipv4Header& header, Ptr<const Packet> packet, uint32_t /*in
         }
     }
 
-    WindowStats& win = g_windows[WindowOf(now)];
-    win.offeredPackets += 1;
-    win.offeredBytes += wire;
-
     const bool hostile = IsAttackSource(header.GetSource()) && now >= g_spec.atkStart &&
                          now < g_spec.atkStart + g_spec.atkDuration;
     if (hostile)
@@ -98,18 +94,52 @@ OnSendOutgoing(const Ipv4Header& header, Ptr<const Packet> packet, uint32_t /*in
         {
             st.app = "attack_" + g_spec.atkType;
         }
-        win.attackOffered += 1;
     }
-    else
+    else if (st.app.empty())
     {
-        if (st.app.empty())
-        {
-            st.app = "legit";
-        }
-        win.legitOffered += 1;
+        st.app = "legit";
     }
-    g_sentAt[packet->GetUid()] = now;
-    g_totalOffered += 1;
+
+    // Count offered load once per packet, at its origin (the first send),
+    // not at every forwarding hop. Per-hop counting inflates the offered
+    // total, and once the gateway policer drops a packet before its remaining
+    // hops, the drop total can exceed it -- so loss must be counted per packet
+    // to stay in [0, 1] and to mean genuine end-to-end packet loss.
+    const uint64_t uid = packet->GetUid();
+    if (g_sentAt.find(uid) == g_sentAt.end())
+    {
+        WindowStats& win = g_windows[WindowOf(now)];
+        win.offeredPackets += 1;
+        win.offeredBytes += wire;
+        if (hostile)
+        {
+            win.attackOffered += 1;
+        }
+        else
+        {
+            win.legitOffered += 1;
+        }
+        // Victim-side accounting: tag every packet addressed to the cloud with
+        // the class it was sent as, so the matching delivery can be counted
+        // against it. This is what makes the mitigation ratio exact.
+        if (IsToCloud(header.GetDestination()))
+        {
+            if (hostile)
+            {
+                win.atkOfferedCloud += 1;
+                g_atkOfferedCloud += 1;
+                g_cloudPktClass[uid] = 1;
+            }
+            else
+            {
+                win.legitOfferedCloud += 1;
+                g_legitOfferedCloud += 1;
+                g_cloudPktClass[uid] = 2;
+            }
+        }
+        g_sentAt[uid] = now;
+        g_totalOffered += 1;
+    }
 }
 
 /** A destination's IP layer delivered a packet up the stack. */
@@ -130,6 +160,25 @@ OnLocalDeliver(const Ipv4Header& header, Ptr<const Packet> packet, uint32_t /*in
     WindowStats& win = g_windows[WindowOf(now)];
     win.deliveredPackets += 1;
     win.deliveredBytes += packet->GetSize() + header.GetSerializedSize() + 18;
+
+    // A packet tagged at origin as cloud-bound has now reached the cloud.
+    // Counting it here (rather than inferring it) is what keeps the mitigation
+    // and goodput ratios exact and inside [0, 1].
+    auto cls = g_cloudPktClass.find(packet->GetUid());
+    if (cls != g_cloudPktClass.end())
+    {
+        if (cls->second == 1)
+        {
+            win.atkDeliveredCloud += 1;
+            g_atkDeliveredCloud += 1;
+        }
+        else
+        {
+            win.legitDeliveredCloud += 1;
+            g_legitDeliveredCloud += 1;
+        }
+        g_cloudPktClass.erase(cls);
+    }
 
     auto sent = g_sentAt.find(packet->GetUid());
     if (sent != g_sentAt.end())
@@ -403,7 +452,8 @@ WriteWindows(const std::string& path)
     out << "window,t_start,t_end,offered_packets,offered_bytes,delivered_packets,"
            "delivered_bytes,dropped_packets,legit_offered,legit_delivered,attack_offered,"
            "mean_latency_ms,max_latency_ms,legit_mean_latency_ms,clean_p95_latency_ms,"
-           "clean_p99_latency_ms,packet_loss_ratio,throughput_mbps\n";
+           "clean_p99_latency_ms,packet_loss_ratio,throughput_mbps,"
+           "atk_offered_cloud,atk_delivered_cloud,legit_offered_cloud,legit_delivered_cloud\n";
     for (const auto& e : g_windows)
     {
         const uint32_t w = e.first;
@@ -423,7 +473,9 @@ WriteWindows(const std::string& path)
             << s.legitDelivered << ',' << s.attackOffered << ',' << std::setprecision(4) << meanLat
             << ',' << (s.latencyMax * 1000.0) << ',' << legitLat << ','
             << Percentile(s.legitLatencySamples, 95.0) << ',' << Percentile(s.legitLatencySamples, 99.0)
-            << ',' << std::setprecision(6) << loss << ',' << std::setprecision(4) << mbps << '\n';
+            << ',' << std::setprecision(6) << loss << ',' << std::setprecision(4) << mbps
+            << ',' << s.atkOfferedCloud << ',' << s.atkDeliveredCloud
+            << ',' << s.legitOfferedCloud << ',' << s.legitDeliveredCloud << '\n';
     }
 }
 
@@ -448,8 +500,66 @@ WriteRunJson(const std::string& path)
     out << "  \"packets_offered\": " << g_totalOffered << ",\n";
     out << "  \"packets_delivered\": " << g_totalDelivered << ",\n";
     out << "  \"packets_dropped\": " << g_totalDropped << ",\n";
+    out << "  \"gateway_blocked_packets\": " << g_gatewayBlockedPackets << ",\n";
+    out << "  \"gateway_blocked_attack_packets\": " << g_gatewayBlockedAttackPackets << ",\n";
+    out << "  \"gateway_blocked_legit_packets\": " << g_gatewayBlockedLegitPackets << ",\n";
+    // Victim-side totals: the basis for mitigation rate and goodput ratio.
+    out << "  \"atk_offered_cloud\": " << g_atkOfferedCloud << ",\n";
+    out << "  \"atk_delivered_cloud\": " << g_atkDeliveredCloud << ",\n";
+    out << "  \"legit_offered_cloud\": " << g_legitOfferedCloud << ",\n";
+    out << "  \"legit_delivered_cloud\": " << g_legitDeliveredCloud << ",\n";
     out << "  \"flow_records\": " << g_flows.size() << "\n";
     out << "}\n";
+}
+
+void
+WriteLiveProgress()
+{
+    const double now = Simulator::Now().GetSeconds();
+    const double elapsed = now - g_progressLastTime;
+    g_gatewayBlockedPps = elapsed > 0.0
+                              ? (g_gatewayBlockedPackets - g_progressLastBlockedPackets) / elapsed
+                              : 0.0;
+    g_progressLastTime = now;
+    g_progressLastBlockedPackets = g_gatewayBlockedPackets;
+
+    const std::string path = g_spec.outputDir + "/ns3_live.json";
+    const std::string temporary = path + ".tmp";
+    std::ofstream out(temporary, std::ios::trunc);
+    if (!out.is_open())
+    {
+        NS_LOG_ERROR("Cannot write live NS-3 progress to " << temporary);
+        return;
+    }
+    out << "{"
+        << "\"sim_time_s\":" << std::fixed << std::setprecision(3) << now << ','
+        << "\"duration_s\":" << g_spec.duration << ','
+        << "\"gateway_blocked_packets\":" << g_gatewayBlockedPackets << ','
+        << "\"gateway_blocked_attack_packets\":" << g_gatewayBlockedAttackPackets << ','
+        << "\"gateway_blocked_legit_packets\":" << g_gatewayBlockedLegitPackets << ','
+        << "\"gateway_blocked_pps\":" << g_gatewayBlockedPps
+        << "}\n";
+    out.close();
+    if (!out)
+    {
+        NS_LOG_ERROR("Failed writing live NS-3 progress to " << temporary);
+        return;
+    }
+    if (std::rename(temporary.c_str(), path.c_str()) != 0)
+    {
+        NS_LOG_ERROR("Failed to publish live NS-3 progress to " << path);
+    }
+}
+
+void
+ScheduleLiveProgress()
+{
+    WriteLiveProgress();
+    constexpr double interval = 0.25;
+    if (Simulator::Now().GetSeconds() + interval < g_spec.duration)
+    {
+        Simulator::Schedule(Seconds(interval), &ScheduleLiveProgress);
+    }
 }
 
 #endif // NETSHIELD_TRACE_H

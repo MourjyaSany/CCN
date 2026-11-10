@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/store";
 import { Shell } from "@/components/layout/Shell";
 import { ErrorBoundary } from "@/components/layout/ErrorBoundary";
 import { Card, EmptyState, TooltipProvider } from "@/components/ui";
+import { Home } from "@/pages/Home";
 import { Overview } from "@/pages/Overview";
 import { LiveNetwork } from "@/pages/LiveNetwork";
 import { Incidents } from "@/pages/Incidents";
@@ -24,7 +25,8 @@ function Routed() {
     <Shell>
       <ErrorBoundary>
         <Routes>
-          <Route path="/" element={<Overview />} />
+          <Route path="/" element={<Home />} />
+          <Route path="/overview" element={<Overview />} />
           <Route path="/network" element={<LiveNetwork />} />
           <Route path="/incidents" element={<Incidents />} />
           <Route path="/alerts" element={<Alerts />} />

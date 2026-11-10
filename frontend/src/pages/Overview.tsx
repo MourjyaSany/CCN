@@ -103,7 +103,8 @@ export function Overview() {
   const avail = last?.clean_availability;
   return (
     <>
-      <PageHeader title="Overview" subtitle="Service health of the uninfected fleet, and what the defence is doing about it." />
+      <PageHeader title="Overview" subtitle="Service health of the uninfected fleet, and what the defence is doing about it."
+        note="Mission control for a live run. Start a scenario below, then watch whether the healthy devices keep their service while the GNN hunts the botnet and the gateway enforces rules. Every figure here is measured from the simulated packets — detection latency, goodput, recovery — never assumed." />
       <div className="mb-5"><Launcher /></div>
       {timeline.isLoading ? (
         <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-28" />)}</div>

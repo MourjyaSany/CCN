@@ -20,9 +20,13 @@ Configuration (environment overrides, else these defaults):
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
+import tempfile
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path, PureWindowsPath
 from typing import Any
@@ -90,8 +94,19 @@ def _wsl_bash(script: str, timeout: float, check: bool = True) -> subprocess.Com
     wsl = _wsl()
     if not wsl:
         raise NS3Unavailable("wsl.exe is not on PATH")
-    return _run([wsl, "-d", WSL_DISTRO, "-u", NS3_USER, "--", "bash", "-lc", script],
-                timeout, check)
+    # Feed the script on stdin (``bash -l -s``) instead of as a ``-c`` argument.
+    # wsl.exe expands ``$VAR`` tokens in its command-line arguments before bash
+    # ever sees them, which silently blanks shell variables used inside the
+    # script (e.g. the ``$N``/``$L`` trace paths in launch_netanim, so NetAnim
+    # would launch with no file). Reading the script from stdin keeps it intact.
+    args = [wsl, "-d", WSL_DISTRO, "-u", NS3_USER, "--", "bash", "-l", "-s"]
+    proc = subprocess.run(args, input=script, capture_output=True, text=True,
+                          timeout=timeout, encoding="utf-8", errors="replace")
+    if check and proc.returncode != 0:
+        raise NS3Unavailable(
+            f"WSL bash failed ({proc.returncode}):\n"
+            f"{(proc.stderr or proc.stdout or '').strip()[:400]}")
+    return proc
 
 
 def detect(timeout_s: float = 30.0) -> WSLNs3:
@@ -119,23 +134,78 @@ def detect(timeout_s: float = 30.0) -> WSLNs3:
         return WSLNs3(False, reason=str(exc))
 
 
-def run_model(spec_win_path: str | Path, timeout_s: float = 3600.0) -> dict[str, Any]:
-    """Run the NS-3 model over a scenario spec written at *spec_win_path*.
+def _read_progress(path: Path) -> dict[str, Any] | None:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, PermissionError, json.JSONDecodeError):
+        return None
 
-    The spec's ``output_dir`` must already name a Windows directory; the model
-    writes ``ns3_flows.csv``, ``ns3_windows.csv`` and ``ns3_run.json`` there.
 
-    Returns:
-        ``{"returncode", "stdout", "stderr", "wall_s"}``.
-    """
-    spec_wsl = win_to_wsl(spec_win_path)
+def _run_wsl_with_progress(
+    script: str,
+    progress_path: Path,
+    timeout_s: float,
+    progress_callback: Callable[[dict[str, Any]], None],
+) -> subprocess.CompletedProcess:
+    wsl = _wsl()
+    if not wsl:
+        raise NS3Unavailable("wsl.exe is not on PATH")
+    args = [wsl, "-d", WSL_DISTRO, "-u", NS3_USER, "--", "bash", "-l", "-s"]
+    deadline = time.monotonic() + timeout_s
+    with tempfile.TemporaryFile() as stdout_file, tempfile.TemporaryFile() as stderr_file:
+        process = subprocess.Popen(
+            args,
+            stdin=subprocess.PIPE,
+            stdout=stdout_file,
+            stderr=stderr_file,
+        )
+        try:
+            if process.stdin is None:
+                raise NS3Unavailable("Failed to open WSL process input")
+            process.stdin.write(script.encode("utf-8"))
+            process.stdin.close()
+            last_progress: dict[str, Any] | None = None
+            while process.poll() is None:
+                progress = _read_progress(progress_path)
+                if progress is not None and progress != last_progress:
+                    progress_callback(progress)
+                    last_progress = progress
+                if time.monotonic() >= deadline:
+                    process.kill()
+                    process.wait()
+                    raise NS3Unavailable(f"NS-3 model exceeded timeout of {timeout_s}s")
+                time.sleep(0.2)
+            progress = _read_progress(progress_path)
+            if progress is not None and progress != last_progress:
+                progress_callback(progress)
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.wait()
+        stdout_file.seek(0)
+        stderr_file.seek(0)
+        stdout = stdout_file.read().decode("utf-8", errors="replace")
+        stderr = stderr_file.read().decode("utf-8", errors="replace")
+    return subprocess.CompletedProcess(args, process.returncode, stdout, stderr)
+
+
+def run_model(
+    spec_win_path: str | Path,
+    timeout_s: float = 3600.0,
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
+) -> dict[str, Any]:
+    """Run the model and optionally stream its live progress."""
+    spec_path = Path(spec_win_path)
+    spec_wsl = win_to_wsl(spec_path)
     exe = f"{NS3_DIR}/{EXE_REL}"
     script = (f"test -f '{spec_wsl}' || {{ echo 'spec not found' >&2; exit 2; }}; "
               f"'{exe}' --spec='{spec_wsl}'")
-    import time
-
     started = time.perf_counter()
-    proc = _wsl_bash(script, timeout_s, check=False)
+    if progress_callback is None:
+        proc = _wsl_bash(script, timeout_s, check=False)
+    else:
+        proc = _run_wsl_with_progress(
+            script, spec_path.parent / "ns3_live.json", timeout_s, progress_callback)
     wall = time.perf_counter() - started
     if proc.returncode != 0 or "NS3_OUTPUT_OK" not in (proc.stdout or ""):
         raise NS3Unavailable(

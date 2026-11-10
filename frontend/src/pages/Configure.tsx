@@ -27,6 +27,7 @@ export function Experiments() {
   return (
     <>
       <PageHeader title="Experiments" subtitle="Every scenario in config/experiments.yaml. Launching one runs it with GraphSAGE in the loop and opens the timeline."
+        note="The scenario library — each a reproducible recipe pinning topology, attack type, intensity and seed. These are the fixtures the detectors are trained and judged on; launch any to see it play out live."
         actions={<Select value={tag} onChange={(e) => setTag(e.target.value)}><option value="all">All tags</option>{tags.map((t) => <option key={t}>{t}</option>)}</Select>} />
       <Card>
         <DataTable>
@@ -73,7 +74,8 @@ export function AttackBuilder() {
   });
   return (
     <>
-      <PageHeader title="Attack builder" subtitle="Compose a campaign the corpus never contained, then watch the defence respond." />
+      <PageHeader title="Attack builder" subtitle="Compose a campaign the corpus never contained, then watch the defence respond."
+        note="The generalisation test. Hand-build a botnet campaign the detector has never seen — novel mix, timing or intensity — and run it. If the defence still catches it, the model learned the shape of an attack, not just memorised the training set." />
       <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
         <Card>
           <CardHeader title="Campaign" />
@@ -118,7 +120,8 @@ export function Topologies() {
   const q = useQuery({ queryKey: ["topologies"], queryFn: api.topologies });
   return (
     <>
-      <PageHeader title="Topologies" subtitle="Seven families, each varying one structural assumption of the baseline tree." />
+      <PageHeader title="Topologies" subtitle="Seven families, each varying one structural assumption of the baseline tree."
+        note="The networks ns-3 builds. Each family changes one structural assumption — fan-out, redundancy, bottleneck — so you can ask whether the detector holds up when the graph itself changes, not just the traffic on it." />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {(q.data ?? []).map((t) => (
           <Card key={t.name}>
@@ -147,7 +150,8 @@ export function Policy() {
   const p = policy.data ?? ({} as any);
   return (
     <>
-      <PageHeader title="Policy & audit" subtitle="The response ladder, the human-in-the-loop setting, and a tamper-evident record of every action." />
+      <PageHeader title="Policy & audit" subtitle="The response ladder, the human-in-the-loop setting, and a tamper-evident record of every action."
+        note="The governance layer. Set how aggressive the response is and how much a human must approve — automatic, hybrid or manual — and read the tamper-evident log of every rule installed and released. This is what makes an autonomous defence accountable." />
       <div className="grid gap-5 xl:grid-cols-[420px_1fr]">
         <Card>
           <CardHeader title="Response ladder" />
